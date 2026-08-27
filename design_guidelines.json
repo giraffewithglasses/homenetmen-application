@@ -1,0 +1,135 @@
+{
+  "theme": "Light theme default with earthy dark mode toggle",
+  "typography": {
+    "strategy": "The 'Soft Utility' (Dashboard / Apps) + Armenian Support",
+    "heading_font": "Montserrat",
+    "body_font": "Noto Sans",
+    "rationale": "Montserrat provides strong geometric, friendly headings and excellent Armenian character support. Noto Sans guarantees flawless bilingual rendering (Armenian + English) with high legibility for data-heavy dashboard tables.",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tight font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "h4": "text-lg sm:text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "small_label": "text-xs tracking-[0.2em] uppercase font-bold text-muted-foreground"
+    }
+  },
+  "colors": {
+    "archetype": "ORGANIC & EARTHY (Trust, Growth, Calm)",
+    "palette": {
+      "background": "#F4F1EA",
+      "foreground": "#081C15",
+      "card": "#FFFFFF",
+      "card_foreground": "#081C15",
+      "sidebar_background": "#1B4332",
+      "sidebar_foreground": "#F4F1EA",
+      "primary": "#E07A5F",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#2D6A4F",
+      "secondary_foreground": "#FFFFFF",
+      "accent": "#F4A261",
+      "accent_foreground": "#081C15",
+      "muted": "#E8E4D9",
+      "muted_foreground": "#52796F",
+      "border": "rgba(45, 106, 79, 0.15)",
+      "ring": "#E07A5F"
+    },
+    "dark_mode_palette": {
+      "background": "#081C15",
+      "foreground": "#F4F1EA",
+      "card": "#142D23",
+      "card_foreground": "#F4F1EA",
+      "sidebar_background": "#05120E",
+      "sidebar_foreground": "#F4F1EA",
+      "primary": "#E07A5F",
+      "primary_foreground": "#081C15",
+      "secondary": "#2D6A4F",
+      "muted": "#1B4332",
+      "border": "rgba(244, 241, 234, 0.1)"
+    },
+    "rules": "Never use pure black or pure white in backgrounds. Tint greys with forest green. Ensure APCA contrast compliance, especially for Terracotta and Sage accents."
+  },
+  "visual_enhancers": {
+    "surfaces": "Use 'Clay & Crisp' Neumorphism. Cards should have soft ambient shadows (e.g., shadow-sm) but MUST have a sharp 1px border (border-border) to ground them.",
+    "borders": "Subtle, semi-transparent borders using the border color defined above.",
+    "radius": "Friendly and approachable: rounded-2xl for major cards/modals, rounded-xl for internal widgets, rounded-full for scout badges, avatars, and pill buttons.",
+    "textures": "Incorporate a subtle SVG noise overlay on the main background to break the 'digital flatness' and feel more tactile, like canvas or paper."
+  },
+  "components": {
+    "buttons": "Pill-shaped (rounded-full) for primary actions. Use interaction animations (scale down slightly on active).",
+    "cards": "Flat background with 1px subtle border. On hover for interactive cards (like programs or members): slight lift (-translate-y-1) and shadow-md.",
+    "badges": "For scout progress badges, use physical patch aesthetics: rounded-full, heavy inner shadow (shadow-inner), and a thicker 2px border matching the secondary color.",
+    "progress_bars": "Thick (h-4 or h-6), rounded-full, utilizing the primary Terracotta color for fill and muted stone grey for track. Add a subtle shine effect or gradient to the fill.",
+    "tables": "Stripped back borders. Use 'High Density' grid rules. Alternating row backgrounds using the muted color with very low opacity.",
+    "navigation": "Sidebar for the dashboard (Admin/Scouts). The sidebar must be deep forest green (#1B4332) with warm sand text, providing a strong anchor for the earthy layout. NEVER use a transparent header."
+  },
+  "grids_and_layouts": {
+    "dashboard_scout": "MODE A (The Bento Grid): For scout-facing views (My Progress, Badges). Highly visual, asymmetric. Mix large hero cards with smaller stat squares. Generous gap-6 or gap-8.",
+    "dashboard_admin": "MODE B (High Density Grid): For Admin panels and Member Databases. Dense, functional, gap-4. Utilize max screen real-estate.",
+    "spacing_system": "Generous Spacing Philosophy. Default padding for cards is p-6 or p-8. Empty space is valued."
+  },
+  "motion": {
+    "interactions": "All buttons and interactive cards must have hover states (color shift, slight lift) and active/press states (scale-down).",
+    "page_transitions": "Staggered fade-in for dashboard widgets using framer-motion. Items should slide up slightly (y: 10 to y: 0) with opacity fade.",
+    "rules": "Transitions must be specific (transition: transform 0.2s ease, opacity 0.2s ease) NOT 'transition: all'. Respect prefers-reduced-motion."
+  },
+  "accessibility": {
+    "contrast": "Text over the Terracotta primary button must be White. Text over the Forest Green sidebar must be Warm Sand (#F4F1EA).",
+    "testing": "All interactive elements, forms, links, and major data points MUST include data-testid attributes (e.g., data-testid='scout-login-button').",
+    "bilingual": "UI must accommodate variable text lengths, as Armenian translations may be longer or shorter than English. Do not use fixed heights for text containers."
+  },
+  "media": {
+    "icons": "Use 'lucide-react' for clean, consistent interface icons. Use heavily across the sidebar and table actions."
+  },
+  "image_urls": {
+    "hero_login": {
+      "url": "https://images.unsplash.com/photo-1599828586134-fbaff96c63d5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHwzfHx5b3V0aCUyMHNjb3V0cyUyMGhpa2luZyUyMG5hdHVyZSUyMG91dGRvb3JzfGVufDB8fHx8MTc4Nzg1NjEzN3ww&ixlib=rb-4.1.0&q=85",
+      "description": "3 men standing on rocky mountain during daytime",
+      "category": "Login screen background or Landing hero."
+    },
+    "programs_placeholder": {
+      "url": "https://images.unsplash.com/photo-1600706843784-6f0ad251f52f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwyfHxjb21wYXNzJTIwbWFwJTIwb3V0ZG9vciUyMGFkdmVudHVyZXxlbnwwfHx8fDE3ODc4NTYxMzd8MA&ixlib=rb-4.1.0&q=85",
+      "description": "A person holding a compass against a blurred mountain landscape",
+      "category": "Programs & Activities banner/cover image."
+    },
+    "chapter_profile": {
+      "url": "https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwzfHxjYW1wZmlyZSUyMG91dGRvb3JzJTIwbmF0dXJlfGVufDB8fHx8MTc4Nzg1NjEzN3ww&ixlib=rb-4.1.0&q=85",
+      "description": "group of people near bonfire near trees during nighttime",
+      "category": "Chapter profile cover image or announcements."
+    },
+    "members_hiking": {
+      "url": "https://images.unsplash.com/photo-1597120590849-a1d5a743d155?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHwxfHx5b3V0aCUyMHNjb3V0cyUyMGhpa2luZyUyMG5hdHVyZSUyMG91dGRvb3JzfGVufDB8fHx8MTc4Nzg1NjEzN3ww&ixlib=rb-4.1.0&q=85",
+      "description": "people walking on dirt road between trees",
+      "category": "Alternative banner for newsletters or community resources."
+    }
+  },
+  "instructions_to_main_agent": [
+    "You are building a multi-role scouting platform. It must feel like an outdoor adventure tool, not a corporate CRM.",
+    "Implement a persistent deep forest green sidebar with off-white active states.",
+    "Use Javascript (.js/.jsx) instead of TypeScript.",
+    "Implement bilingual support structures (use a simple mock translation or layout that supports Armenian).",
+    "Use Shadcn UI components but heavily customize their border radius (rounded-2xl) and remove standard grey shadows in favor of subtle tinted shadows.",
+    "Build the 'Progress Badges' module as circular UI elements with inner shadows to simulate embroidered patches.",
+    "Do NOT center align the app container. No '.App { text-align: center; }'.",
+    "NEVER use generic placeholder text or dummy image APIs (like via.placeholder.com). Use the provided Unsplash URLs.",
+    "Include data-testid attributes on all interactive elements.",
+    "Provide a Base64 image storage mock/utility if implementing actual file uploads for Resources or Profile images."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. In frontend design, this creates what users call the 'AI slop' aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: 'transition: all'. Always add transitions for specific interactive elements excluding transforms.",
+    "You MUST NOT center align the app container, ie do not add '.App { text-align: center; }' in the css file.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER: use AI assistant Emoji characters like \ud83e\udd16\ud83e\udde0\ud83d\udcad\ud83d\udca1\ud83d\udd2e\ud83c\udfaf etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, custom cursors, and loading animations separate good from extraordinary.",
+    "Main agent relies on provided image URLs. Missing categories = placeholder text which is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui.",
+    "Use sonner for toasts. Sonner components are located in /app/frontend/src/components/ui/sonner.jsx or similar path."
+  ]
+}

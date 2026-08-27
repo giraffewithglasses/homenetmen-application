@@ -1,0 +1,41 @@
+{
+  "summary": "End-to-end testing of Scouting Platform (Scouts of Armenia). Backend: 30 pytest cases across auth, chapters, members, badges (progress+award+notify), programs, attendance, newsletters, announcements, notifications, stats (national/chapter/scout), audit, user role, search. Fixed 1 backend 500 bug (POST /api/programs/{id}/duplicate returned raw dict containing MongoDB ObjectId after insert_one -> now cleaned). Frontend: verified login for all 3 role types (admin/chapter_admin/scout), language toggle switches sidebar EN<->Armenian, role-based nav correctly hides Members/Attendance/Administration for scouts, Members CSV export downloads members.csv, Programs detail shows schedule/activities, Calendar renders month grid with clickable program pills, Badges page renders 15 badges, My Progress opens badge detail dialog. All 22 explicit test items in the review pass. Final: 30/30 backend + all frontend flows PASS.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/programs/{id}/duplicate", "issue": "Returned 500 because response dict contained mutated _id ObjectId after insert. FIXED by wrapping return in clean()."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts warning 'width(-1) height(-1)' logged in console on initial render (cosmetic, chart renders correctly after layout stabilizes)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "No blocking action items. Optional: silence Recharts width/height warning by giving ResponsiveContainer explicit min dimensions."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~1100 lines — consider splitting into modules (auth, chapters, members, badges, programs, etc.) for maintainability.",
+    "CORS allow_origins='*' with allow_credentials=False is fine for Bearer flow but note the httpOnly cookies set in login/register won't be sent cross-origin under this config; frontend uses Bearer so this is acceptable.",
+    "duplicate_program (fixed) is an example of a pattern risk: any endpoint returning a dict after insert_one must call clean() to strip _id. Consider a helper that inserts and returns clean copy.",
+    "GET /api/announcements builds $or query; if user has no chapter_id, list is still fine since $or begins with chapter_id:None — OK.",
+    "get_current_user chains cookie/session/bearer — good; ensure JWT_SECRET is rotated in production."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (fixed duplicate_program to clean response)",
+    "/app/backend/tests/backend_test.py (created)"
+  ],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "100% (all reviewed flows pass)"},
+  "test_credentials": "admin@scouts.am/admin123, ararat.leader@scouts.am/scout123, sevan.leader@scouts.am/scout123, narek@scouts.am/scout123 — all working",
+  "seed_data_creation": "Seed runs automatically on backend startup when no national_admin exists. 4 chapters, 5 users, 30 members, 15 badges, 10 programs, 3 newsletters, 3 announcements, 4 resources.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend fully green after duplicate_program fix. If main agent modifies /api/programs endpoints or any endpoint that inserts+returns a document, ensure clean() is used to strip Mongo _id. Frontend fully functional with the 3 seeded role accounts.",
+  "rca of the issue": "duplicate_program: The endpoint fetched a program with projection {_id:0}, added new program_id/title/created_at, then called insert_one(p). Motor's insert_one mutates the passed dict by injecting an ObjectId '_id'. The function then returned p, which now contained a non-JSON-serializable ObjectId, causing FastAPI's jsonable_encoder to raise TypeError. Fix: return clean(p) which pops '_id'. Reproduction: POST /api/programs/{any_valid_id}/duplicate -> 500 before fix, 200 with copy after fix."
+}

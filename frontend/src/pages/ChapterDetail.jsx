@@ -1,0 +1,100 @@
+import React, { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { api } from "@/lib/api";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Building2, MapPin, Users, Mail, Phone, ArrowLeft } from "lucide-react";
+
+export default function ChapterDetail() {
+  const { id } = useParams();
+  const [c, setC] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+
+  useEffect(() => {
+    api.get(`/chapters/${id}`).then(r => setC(r.data));
+    api.get(`/members?chapter_id=${id}`).then(r => setMembers(r.data));
+    api.get(`/programs?chapter_id=${id}`).then(r => setPrograms(r.data));
+    api.get("/announcements").then(r => setAnnouncements(r.data.filter(a => a.chapter_id === id).slice(0,3)));
+  }, [id]);
+
+  if (!c) return <div>Loading…</div>;
+
+  return (
+    <div className="space-y-6">
+      <Link to="/chapters" className="inline-flex items-center gap-2 text-sm text-muted-foreground"><ArrowLeft size={14} /> All chapters</Link>
+
+      <Card className="clay-card p-8 relative overflow-hidden" style={{
+        backgroundImage: "linear-gradient(120deg, hsl(152 43% 15% / 0.92), hsl(149 40% 30% / 0.75)), url('https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?crop=entropy&cs=srgb&fm=jpg&q=85')",
+        backgroundSize: "cover", color: "white", border: "none",
+      }}>
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center bg-[hsl(12,65%,63%)] shadow-inner border-2 border-white/30">
+            <Building2 size={26} />
+          </div>
+          <div>
+            <div className="uppercase-label" style={{ color: "hsl(32 87% 75%)" }}>Chapter</div>
+            <h1 className="font-display text-3xl lg:text-5xl font-black">{c.name}</h1>
+            <div className="text-white/80">{c.name_hy}</div>
+          </div>
+        </div>
+        <p className="mt-6 text-white/85 max-w-2xl">{c.description}</p>
+        <div className="mt-4 flex flex-wrap gap-4 text-sm">
+          <span className="inline-flex items-center gap-2"><MapPin size={14} /> {c.location}</span>
+          <span className="inline-flex items-center gap-2"><Mail size={14} /> {c.contact_email}</span>
+          <span className="inline-flex items-center gap-2"><Phone size={14} /> {c.contact_phone}</span>
+          <span className="inline-flex items-center gap-2"><Users size={14} /> {c.member_count} members</span>
+        </div>
+      </Card>
+
+      <div className="grid lg:grid-cols-3 gap-4">
+        <Card className="clay-card p-6">
+          <h3 className="font-display font-bold text-xl mb-4">Leadership</h3>
+          <div className="space-y-3">
+            {(c.leaders || []).map(l => (
+              <div key={l.user_id} className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[hsl(149,40%,30%)] text-white flex items-center justify-center font-bold">{l.name?.[0]}</div>
+                <div>
+                  <div className="font-semibold text-sm">{l.name}</div>
+                  <div className="text-xs text-muted-foreground">{l.role.replace("_"," ")}</div>
+                </div>
+              </div>
+            ))}
+            {!c.leaders?.length && <div className="text-sm text-muted-foreground">No leaders assigned yet.</div>}
+          </div>
+        </Card>
+
+        <Card className="clay-card p-6 lg:col-span-2">
+          <h3 className="font-display font-bold text-xl mb-4">Upcoming programs</h3>
+          <div className="space-y-3">
+            {programs.slice(0, 5).map(p => (
+              <Link to={`/programs/${p.program_id}`} key={p.program_id} className="flex items-center justify-between p-3 rounded-xl hover:bg-muted/60">
+                <div>
+                  <div className="font-semibold">{p.title}</div>
+                  <div className="text-xs text-muted-foreground">{p.date} · {p.location}</div>
+                </div>
+                <Badge className="rounded-full bg-[hsl(149,40%,30%)]">{p.section}</Badge>
+              </Link>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <Card className="clay-card p-6">
+        <h3 className="font-display font-bold text-xl mb-4">Members ({members.length})</h3>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {members.slice(0, 12).map(m => (
+            <Link to={`/members/${m.member_id}`} key={m.member_id} className="p-3 rounded-xl border border-border hover:bg-muted/50 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[hsl(12,65%,63%)]/20 text-[hsl(12,65%,63%)] flex items-center justify-center font-bold">{m.full_name[0]}</div>
+              <div>
+                <div className="font-semibold text-sm">{m.full_name}</div>
+                <div className="text-xs text-muted-foreground">{m.section} · {m.patrol}</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
