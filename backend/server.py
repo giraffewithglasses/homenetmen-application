@@ -192,7 +192,8 @@ class MemberIn(BaseModel):
 class BadgeIn(BaseModel):
     name: str
     name_hy: Optional[str] = ""
-    icon: str = ""  # emoji-free lucide icon name or base64
+    icon: str = ""  # lucide icon name (fallback)
+    icon_image: str = ""  # base64 data URL (preferred if provided)
     color: str = "#2D6A4F"
     description: str = ""
     section: str = "Scouts"
@@ -841,6 +842,10 @@ class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     picture: Optional[str] = None  # base64 data URL
 
+class PasswordChangeIn(BaseModel):
+    current_password: str
+    new_password: str
+
 @api.put("/auth/me")
 async def update_profile(payload: ProfileUpdate, user: dict = Depends(get_current_user)):
     upd = {}
@@ -849,6 +854,28 @@ async def update_profile(payload: ProfileUpdate, user: dict = Depends(get_curren
     if upd:
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": upd})
     return await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "password_hash": 0})
+
+@api.post("/auth/change-password")
+async def change_password(payload: PasswordChangeIn, user: dict = Depends(get_current_user)):
+    u = await db.users.find_one({"user_id": user["user_id"]})
+    if not u.get("password_hash"):
+        raise HTTPException(400, "This account signs in with Google; no password to change.")
+    if not verify_password(payload.current_password, u["password_hash"]):
+        raise HTTPException(401, "Current password is incorrect")
+    if len(payload.new_password) < 6:
+        raise HTTPException(400, "New password must be at least 6 characters")
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"password_hash": hash_password(payload.new_password)}})
+    await audit(user, "password_change", "user", user["user_id"])
+    return {"ok": True}
+
+# ---------- Trash / Archive bin ----------
+@api.get("/trash")
+async def trash_bin(user: dict = Depends(require_roles("national_admin", "chapter_admin"))):
+    return {
+        "chapters": await db.chapters.find({"archived": True}, {"_id": 0}).to_list(200),
+        "badges": await db.badges.find({"archived": True}, {"_id": 0}).to_list(500),
+        "resources": await db.resources.find({"archived": True}, {"_id": 0, "file_data": 0}).to_list(500),
+    }
 
 # ---------- Users / Administration ----------
 @api.get("/users")

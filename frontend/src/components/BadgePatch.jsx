@@ -25,19 +25,22 @@ export default function BadgePatch({ badge, size = 72, awarded = false, progress
   const Icon = map[badge.icon] || Award;
   const color = badge.color || colors[badge.icon] || "#2D6A4F";
   const scale = size / 72;
+  const hasImage = !!badge.icon_image;
   return (
     <div className="flex flex-col items-center gap-2">
       <div
-        className="patch"
+        className="patch overflow-hidden"
         style={{
           width: size, height: size,
-          background: `radial-gradient(circle at 30% 30%, ${color} 0%, ${color} 55%, ${shade(color, -0.2)} 100%)`,
+          background: hasImage ? "#fff" : `radial-gradient(circle at 30% 30%, ${color} 0%, ${color} 55%, ${shade(color, -0.2)} 100%)`,
           filter: awarded ? "saturate(1)" : "saturate(0.4) opacity(0.75)",
           borderColor: shade(color, -0.25),
         }}
         data-testid={`badge-patch-${badge.badge_id}`}
       >
-        <Icon size={26 * scale} color="white" strokeWidth={2.2} />
+        {hasImage
+          ? <img src={badge.icon_image} alt="" className="w-full h-full object-cover"/>
+          : <Icon size={26 * scale} color="white" strokeWidth={2.2} />}
       </div>
       {progress > 0 && progress < 100 && (
         <div className="w-14 h-1.5 rounded-full bg-muted overflow-hidden">

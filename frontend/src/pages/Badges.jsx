@@ -23,7 +23,7 @@ export default function Badges() {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const [form, setForm] = useState({
-    name: "", name_hy: "", icon: "star", color: "#2D6A4F", description: "",
+    name: "", name_hy: "", icon: "star", icon_image: "", color: "#2D6A4F", description: "",
     section: "Scouts", category: "Scouting Skills", difficulty: "medium",
     recommended_age: "12+", requirements: [],
   });
@@ -81,8 +81,36 @@ export default function Badges() {
                   <div><Label>Name</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} data-testid="bdg-name"/></div>
                   <div><Label>Name (Armenian)</Label><Input value={form.name_hy} onChange={e => setForm({...form, name_hy: e.target.value})}/></div>
                   <div className="col-span-2"><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}/></div>
-                  <div><Label>Icon (lucide name)</Label><Input value={form.icon} onChange={e => setForm({...form, icon: e.target.value})} placeholder="star, tent, compass…"/></div>
-                  <div><Label>Color</Label><Input type="color" value={form.color} onChange={e => setForm({...form, color: e.target.value})}/></div>
+                  <div className="col-span-2">
+                    <Label>Badge image</Label>
+                    <div className="flex items-center gap-4 mt-2">
+                      <BadgePatch badge={form} awarded size={64}/>
+                      <div className="flex-1 space-y-2">
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          data-testid="bdg-image-input"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0]; if (!f) return;
+                            if (f.size > 1024 * 1024) return toast.error("Image must be under 1 MB");
+                            const r = new FileReader();
+                            r.onload = () => setForm({...form, icon_image: r.result});
+                            r.readAsDataURL(f);
+                          }}
+                        />
+                        {form.icon_image && (
+                          <button
+                            type="button"
+                            onClick={() => setForm({...form, icon_image: ""})}
+                            className="text-xs uppercase tracking-widest font-bold text-[hsl(0,65%,55%)]"
+                            data-testid="bdg-image-clear"
+                          >Remove image</button>
+                        )}
+                        <p className="text-xs text-muted-foreground">Upload a square image (PNG/JPG, &lt;1&nbsp;MB). Leave empty to use the color badge below.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div><Label>Fallback color</Label><Input type="color" value={form.color} onChange={e => setForm({...form, color: e.target.value})}/></div>
                   <div><Label>Section</Label>
                     <Select value={form.section} onValueChange={v => setForm({...form, section: v})}>
                       <SelectTrigger><SelectValue/></SelectTrigger>

@@ -23,6 +23,7 @@ import Resources from "@/pages/Resources";
 import Notifications from "@/pages/Notifications";
 import Administration from "@/pages/Administration";
 import Profile from "@/pages/Profile";
+import Trash from "@/pages/Trash";
 import "@/App.css";
 
 function Router() {
@@ -49,6 +50,7 @@ function Router() {
         <Route path="/resources" element={<Resources />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/administration" element={<Administration />} />
+        <Route path="/trash" element={<Trash />} />
         <Route path="/profile" element={<Profile />} />
       </Route>
     </Routes>
