@@ -74,10 +74,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen, lang }) {
           </nav>
 
           <div className="px-4 pb-6">
-            <div className="rounded-2xl p-4 mb-3" style={{ background: "rgba(244,241,234,0.06)" }}>
-              <div className="text-xs opacity-70">{user?.role?.replace("_", " ").toUpperCase()}</div>
-              <div className="font-semibold mt-1 truncate">{user?.name}</div>
-              <div className="text-xs opacity-70 truncate">{user?.email}</div>
+            <div className="rounded-2xl p-4 mb-3 flex items-center gap-3" style={{ background: "rgba(244,241,234,0.06)" }}>
+              {user?.picture ? (
+                <img src={user.picture} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0"/>
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-[hsl(12,65%,63%)] text-white flex items-center justify-center font-bold flex-shrink-0">{user?.name?.[0]}</div>
+              )}
+              <div className="min-w-0">
+                <div className="text-xs opacity-70">{user?.role?.replace("_", " ").toUpperCase()}</div>
+                <div className="font-semibold truncate text-sm">{user?.name}</div>
+              </div>
             </div>
             <Button
               variant="secondary"

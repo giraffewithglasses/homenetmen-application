@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, MapPin, Clock, Copy, CalendarDays } from "lucide-react";
+import { Plus, MapPin, Clock, Copy, CalendarDays, Trash2 } from "lucide-react";
 
 const SECTIONS = ["Cubs", "Scouts", "Senior Scouts", "Rovers"];
 
@@ -36,6 +36,11 @@ export default function Programs() {
   };
   const dup = async (id) => {
     try { await api.post(`/programs/${id}/duplicate`); toast.success("Duplicated"); load(); }
+    catch { toast.error("Failed"); }
+  };
+  const remove = async (id) => {
+    if (!window.confirm("Delete this program?")) return;
+    try { await api.delete(`/programs/${id}`); toast.success("Deleted"); load(); }
     catch { toast.error("Failed"); }
   };
 
@@ -99,7 +104,10 @@ export default function Programs() {
                 <div className="flex items-center gap-2"><MapPin size={12}/>{p.location}</div>
               </div>
               {canManage && (
-                <Button size="sm" variant="ghost" className="mt-3" onClick={() => dup(p.program_id)}><Copy size={12} className="mr-1"/>Duplicate</Button>
+                <div className="mt-3 flex gap-1">
+                  <Button size="sm" variant="ghost" onClick={() => dup(p.program_id)} data-testid={`dup-prg-${p.program_id}`}><Copy size={12} className="mr-1"/>Duplicate</Button>
+                  <Button size="sm" variant="ghost" onClick={() => remove(p.program_id)} className="text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" data-testid={`del-prg-${p.program_id}`}><Trash2 size={12} className="mr-1"/>Delete</Button>
+                </div>
               )}
             </div>
           </Card>

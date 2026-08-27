@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { FileText, Plus, Download } from "lucide-react";
+import { FileText, Plus, Download, Archive, ArchiveRestore, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 const CATEGORIES = ["Manuals", "Activity ideas", "Progress badge materials", "Forms", "Policies", "Camp documents", "Training materials", "Leader resources"];
 
@@ -19,12 +20,15 @@ export default function Resources() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", category: "Manuals", description: "", file_data: "", file_name: "", file_type: "" });
   const [category, setCategory] = useState("all");
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = () => {
-    const p = category !== "all" ? `?category=${encodeURIComponent(category)}` : "";
-    api.get(`/resources${p}`).then(r => setItems(r.data));
+    const params = new URLSearchParams();
+    if (category !== "all") params.set("category", category);
+    if (showArchived) params.set("include_archived", "true");
+    api.get(`/resources?${params}`).then(r => setItems(r.data));
   };
-  useEffect(() => { load(); }, [category]);
+  useEffect(() => { load(); }, [category, showArchived]);
 
   const canUpload = user?.role && user.role !== "scout";
 
@@ -36,6 +40,18 @@ export default function Resources() {
   };
   const save = async () => {
     try { await api.post("/resources", form); toast.success("Uploaded"); setOpen(false); load(); }
+    catch { toast.error("Failed"); }
+  };
+  const archive = async (rid, archived) => {
+    try {
+      await api.post(`/resources/${rid}/${archived ? "unarchive" : "archive"}`);
+      toast.success(archived ? "Restored" : "Archived");
+      load();
+    } catch { toast.error("Failed"); }
+  };
+  const remove = async (rid) => {
+    if (!window.confirm("Delete this resource?")) return;
+    try { await api.delete(`/resources/${rid}`); toast.success("Deleted"); load(); }
     catch { toast.error("Failed"); }
   };
   const download = async (rid, name) => {
@@ -53,7 +69,13 @@ export default function Resources() {
           <div className="uppercase-label">Library</div>
           <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Resources</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          {canUpload && (
+            <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold cursor-pointer">
+              <Switch checked={showArchived} onCheckedChange={setShowArchived} data-testid="res-show-archived"/>
+              Archived
+            </label>
+          )}
           <Select value={category} onValueChange={setCategory}>
             <SelectTrigger className="w-56"><SelectValue placeholder="Category"/></SelectTrigger>
             <SelectContent>
@@ -88,7 +110,27 @@ export default function Resources() {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map(r => (
-          <Card key={r.resource_id} className="clay-card p-6 hover-lift" data-testid={`res-${r.resource_id}`}>
+          <Card key={r.resource_id} className={`clay-card p-6 hover-lift relative ${r.archived ? "opacity-60" : ""}`} data-testid={`res-${r.resource_id}`}>
+            {canUpload && (
+              <div className="absolute top-3 right-3 flex gap-1">
+                <button
+                  onClick={() => archive(r.resource_id, r.archived)}
+                  className="w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(32,87%,67%)]/20 hover:text-[hsl(32,87%,55%)] flex items-center justify-center"
+                  data-testid={`archive-res-${r.resource_id}`}
+                  title={r.archived ? "Unarchive" : "Archive"}
+                >
+                  {r.archived ? <ArchiveRestore size={14}/> : <Archive size={14}/>}
+                </button>
+                {user?.role === "national_admin" && (
+                  <button
+                    onClick={() => remove(r.resource_id)}
+                    className="w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(0,65%,55%)]/10 hover:text-[hsl(0,65%,55%)] flex items-center justify-center"
+                    data-testid={`del-res-${r.resource_id}`}
+                    title="Delete"
+                  ><Trash2 size={14}/></button>
+                )}
+              </div>
+            )}
             <div className="flex items-start gap-3">
               <div className="w-11 h-11 rounded-2xl bg-[hsl(149,40%,30%)]/15 text-[hsl(149,40%,30%)] flex items-center justify-center">
                 <FileText size={20}/>

@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus } from "lucide-react";
+import { Plus, Archive, ArchiveRestore } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import BadgePatch from "@/components/BadgePatch";
 
 const SECTIONS = ["Cubs", "Scouts", "Senior Scouts", "Rovers"];
@@ -27,13 +28,21 @@ export default function Badges() {
     recommended_age: "12+", requirements: [],
   });
   const [reqInput, setReqInput] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
 
-  const load = () => api.get("/badges").then(r => setBadges(r.data));
-  useEffect(() => { load(); }, []);
+  const load = () => api.get(`/badges?include_archived=${showArchived}`).then(r => setBadges(r.data));
+  useEffect(() => { load(); }, [showArchived]);
 
   const save = async () => {
     try { await api.post("/badges", form); toast.success("Badge created"); setOpen(false); load(); }
     catch { toast.error("Failed"); }
+  };
+  const archive = async (bid, archived) => {
+    try {
+      await api.post(`/badges/${bid}/${archived ? "unarchive" : "archive"}`);
+      toast.success(archived ? "Restored" : "Archived");
+      load();
+    } catch { toast.error("Failed"); }
   };
   const addReq = () => { if (reqInput.trim()) { setForm({...form, requirements: [...form.requirements, reqInput.trim()]}); setReqInput(""); } };
 
@@ -47,7 +56,13 @@ export default function Badges() {
           <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Progress Badges</h1>
           <p className="text-muted-foreground mt-1">Skills, adventures and merit.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          {user?.role === "national_admin" && (
+            <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold cursor-pointer">
+              <Switch checked={showArchived} onCheckedChange={setShowArchived} data-testid="bdg-show-archived"/>
+              Show archived
+            </label>
+          )}
           <Select value={filter} onValueChange={setFilter}>
             <SelectTrigger className="w-56"><SelectValue placeholder="Category"/></SelectTrigger>
             <SelectContent>
@@ -111,7 +126,17 @@ export default function Badges() {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(b => (
-          <Card key={b.badge_id} className="clay-card p-6 hover-lift">
+          <Card key={b.badge_id} className={`clay-card p-6 hover-lift relative ${b.archived ? "opacity-60" : ""}`}>
+            {user?.role === "national_admin" && (
+              <button
+                onClick={() => archive(b.badge_id, b.archived)}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(32,87%,67%)]/20 hover:text-[hsl(32,87%,55%)] flex items-center justify-center"
+                data-testid={`archive-bdg-${b.badge_id}`}
+                title={b.archived ? "Unarchive" : "Archive"}
+              >
+                {b.archived ? <ArchiveRestore size={14}/> : <Archive size={14}/>}
+              </button>
+            )}
             <div className="flex items-start gap-4">
               <BadgePatch badge={b} awarded />
               <div className="flex-1">

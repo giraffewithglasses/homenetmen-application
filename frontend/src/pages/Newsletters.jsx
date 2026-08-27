@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, Mail } from "lucide-react";
+import { Plus, Mail, Trash2 } from "lucide-react";
 
 export default function Newsletters() {
   const { user } = useAuth();
@@ -24,6 +24,12 @@ export default function Newsletters() {
     try { await api.post("/newsletters", form); toast.success("Published"); setOpen(false); load(); }
     catch { toast.error("Failed"); }
   };
+  const remove = async (nid) => {
+    if (!window.confirm("Delete this newsletter?")) return;
+    try { await api.delete(`/newsletters/${nid}`); toast.success("Deleted"); load(); }
+    catch { toast.error("Failed"); }
+  };
+  const isAdmin = user?.role === "national_admin";
 
   return (
     <div className="space-y-6">
@@ -53,7 +59,14 @@ export default function Newsletters() {
       </div>
 
       {items[0] && (
-        <Card className="clay-card overflow-hidden">
+        <Card className="clay-card overflow-hidden relative">
+          {isAdmin && (
+            <button
+              onClick={() => remove(items[0].newsletter_id)}
+              className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/90 hover:bg-[hsl(0,65%,55%)] hover:text-white text-muted-foreground flex items-center justify-center"
+              data-testid={`del-newsletter-${items[0].newsletter_id}`}
+            ><Trash2 size={14}/></button>
+          )}
           <div className="grid md:grid-cols-2">
             <div className="h-56 md:h-auto" style={{
               backgroundImage: "url('https://images.unsplash.com/photo-1597120590849-a1d5a743d155?crop=entropy&cs=srgb&fm=jpg&q=85')",
@@ -73,7 +86,14 @@ export default function Newsletters() {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.slice(1).map(n => (
-          <Card key={n.newsletter_id} className="clay-card p-6 hover-lift">
+          <Card key={n.newsletter_id} className="clay-card p-6 hover-lift relative">
+            {isAdmin && (
+              <button
+                onClick={() => remove(n.newsletter_id)}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(0,65%,55%)]/10 hover:text-[hsl(0,65%,55%)] flex items-center justify-center"
+                data-testid={`del-newsletter-${n.newsletter_id}`}
+              ><Trash2 size={14}/></button>
+            )}
             <div className="w-10 h-10 rounded-full bg-[hsl(32,87%,67%)]/25 text-[hsl(32,87%,55%)] flex items-center justify-center"><Mail size={18}/></div>
             <div className="uppercase-label mt-3">{new Date(n.created_at).toLocaleDateString()}</div>
             <div className="font-display font-bold text-lg mt-1">{n.title}</div>

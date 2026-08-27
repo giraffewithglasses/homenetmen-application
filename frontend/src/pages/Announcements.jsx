@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, AlertOctagon, Megaphone } from "lucide-react";
+import { Plus, AlertOctagon, Megaphone, Trash2 } from "lucide-react";
 
 export default function Announcements() {
   const { user } = useAuth();
@@ -25,6 +25,16 @@ export default function Announcements() {
   const save = async () => {
     try { await api.post("/announcements", form); toast.success("Posted"); setOpen(false); load(); }
     catch { toast.error("Failed"); }
+  };
+  const remove = async (aid) => {
+    if (!window.confirm("Delete this announcement?")) return;
+    try { await api.delete(`/announcements/${aid}`); toast.success("Deleted"); load(); }
+    catch { toast.error("Failed"); }
+  };
+  const canDelete = (a) => {
+    if (user?.role === "national_admin") return true;
+    if (["chapter_admin","chapter_leader"].includes(user?.role) && a.chapter_id === user?.chapter_id) return true;
+    return false;
   };
 
   return (
@@ -68,7 +78,14 @@ export default function Announcements() {
 
       <div className="grid md:grid-cols-2 gap-4">
         {items.map(a => (
-          <Card key={a.announcement_id} className={`clay-card p-6 border-l-4 ${a.priority === "high" || a.priority === "urgent" ? "border-l-[hsl(12,65%,63%)]" : "border-l-[hsl(149,40%,30%)]"}`}>
+          <Card key={a.announcement_id} className={`clay-card p-6 border-l-4 relative ${a.priority === "high" || a.priority === "urgent" ? "border-l-[hsl(12,65%,63%)]" : "border-l-[hsl(149,40%,30%)]"}`}>
+            {canDelete(a) && (
+              <button
+                onClick={() => remove(a.announcement_id)}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(0,65%,55%)]/10 hover:text-[hsl(0,65%,55%)] flex items-center justify-center"
+                data-testid={`del-ann-${a.announcement_id}`}
+              ><Trash2 size={14}/></button>
+            )}
             <div className="flex items-start gap-3">
               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${a.priority === "high" || a.priority === "urgent" ? "bg-[hsl(12,65%,63%)]" : "bg-[hsl(149,40%,30%)]"} text-white`}>
                 {a.priority === "high" || a.priority === "urgent" ? <AlertOctagon size={18}/> : <Megaphone size={18}/>}

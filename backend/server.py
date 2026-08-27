@@ -401,8 +401,9 @@ async def emergent_session(payload: SessionIn, response: Response):
 
 # ---------- Chapters ----------
 @api.get("/chapters")
-async def list_chapters():
-    items = await db.chapters.find({}, {"_id": 0}).to_list(500)
+async def list_chapters(include_archived: bool = False):
+    q = {} if include_archived else {"archived": {"$ne": True}}
+    items = await db.chapters.find(q, {"_id": 0}).to_list(500)
     for c in items:
         c["member_count"] = await db.members.count_documents({"chapter_id": c["chapter_id"], "status": {"$ne": "archived"}})
     return items
@@ -436,6 +437,18 @@ async def update_chapter(chapter_id: str, payload: ChapterIn, user: dict = Depen
 async def delete_chapter(chapter_id: str, user: dict = Depends(require_roles("national_admin"))):
     await db.chapters.delete_one({"chapter_id": chapter_id})
     await audit(user, "delete", "chapter", chapter_id)
+    return {"ok": True}
+
+@api.post("/chapters/{chapter_id}/archive")
+async def archive_chapter(chapter_id: str, user: dict = Depends(require_roles("national_admin"))):
+    await db.chapters.update_one({"chapter_id": chapter_id}, {"$set": {"archived": True}})
+    await audit(user, "archive", "chapter", chapter_id)
+    return {"ok": True}
+
+@api.post("/chapters/{chapter_id}/unarchive")
+async def unarchive_chapter(chapter_id: str, user: dict = Depends(require_roles("national_admin"))):
+    await db.chapters.update_one({"chapter_id": chapter_id}, {"$set": {"archived": False}})
+    await audit(user, "unarchive", "chapter", chapter_id)
     return {"ok": True}
 
 # ---------- Members ----------
@@ -505,8 +518,8 @@ async def archive_member(member_id: str, user: dict = Depends(get_current_user))
 
 # ---------- Badges ----------
 @api.get("/badges")
-async def list_badges(section: Optional[str] = None):
-    q = {}
+async def list_badges(section: Optional[str] = None, include_archived: bool = False):
+    q = {} if include_archived else {"archived": {"$ne": True}}
     if section: q["section"] = section
     return await db.badges.find(q, {"_id": 0}).sort("name", 1).to_list(500)
 
@@ -528,6 +541,18 @@ async def update_badge(badge_id: str, payload: BadgeIn, user: dict = Depends(req
 async def delete_badge(badge_id: str, user: dict = Depends(require_roles("national_admin"))):
     await db.badges.delete_one({"badge_id": badge_id})
     await audit(user, "delete", "badge", badge_id)
+    return {"ok": True}
+
+@api.post("/badges/{badge_id}/archive")
+async def archive_badge(badge_id: str, user: dict = Depends(require_roles("national_admin"))):
+    await db.badges.update_one({"badge_id": badge_id}, {"$set": {"archived": True}})
+    await audit(user, "archive", "badge", badge_id)
+    return {"ok": True}
+
+@api.post("/badges/{badge_id}/unarchive")
+async def unarchive_badge(badge_id: str, user: dict = Depends(require_roles("national_admin"))):
+    await db.badges.update_one({"badge_id": badge_id}, {"$set": {"archived": False}})
+    await audit(user, "unarchive", "badge", badge_id)
     return {"ok": True}
 
 @api.get("/members/{member_id}/badges")
@@ -747,8 +772,8 @@ async def delete_announcement(aid: str, user: dict = Depends(get_current_user)):
 
 # ---------- Resources ----------
 @api.get("/resources")
-async def list_resources(category: Optional[str] = None):
-    q = {}
+async def list_resources(category: Optional[str] = None, include_archived: bool = False):
+    q = {} if include_archived else {"archived": {"$ne": True}}
     if category: q["category"] = category
     return await db.resources.find(q, {"_id": 0, "file_data": 0}).sort("created_at", -1).to_list(500)
 
@@ -773,6 +798,20 @@ async def delete_resource(rid: str, user: dict = Depends(get_current_user)):
     await db.resources.delete_one({"resource_id": rid})
     return {"ok": True}
 
+@api.post("/resources/{rid}/archive")
+async def archive_resource(rid: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in ("national_admin", "chapter_admin"): raise HTTPException(403, "Not allowed")
+    await db.resources.update_one({"resource_id": rid}, {"$set": {"archived": True}})
+    await audit(user, "archive", "resource", rid)
+    return {"ok": True}
+
+@api.post("/resources/{rid}/unarchive")
+async def unarchive_resource(rid: str, user: dict = Depends(get_current_user)):
+    if user["role"] not in ("national_admin", "chapter_admin"): raise HTTPException(403, "Not allowed")
+    await db.resources.update_one({"resource_id": rid}, {"$set": {"archived": False}})
+    await audit(user, "unarchive", "resource", rid)
+    return {"ok": True}
+
 # ---------- Notifications ----------
 @api.get("/notifications")
 async def my_notifications(user: dict = Depends(get_current_user)):
@@ -787,6 +826,29 @@ async def mark_read(nid: str, user: dict = Depends(get_current_user)):
 async def mark_all_read(user: dict = Depends(get_current_user)):
     await db.notifications.update_many({"user_id": user["user_id"]}, {"$set": {"read": True}})
     return {"ok": True}
+
+@api.delete("/notifications/{nid}")
+async def delete_notification(nid: str, user: dict = Depends(get_current_user)):
+    await db.notifications.delete_one({"notification_id": nid, "user_id": user["user_id"]})
+    return {"ok": True}
+
+@api.delete("/notifications")
+async def clear_notifications(user: dict = Depends(get_current_user)):
+    await db.notifications.delete_many({"user_id": user["user_id"]})
+    return {"ok": True}
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    picture: Optional[str] = None  # base64 data URL
+
+@api.put("/auth/me")
+async def update_profile(payload: ProfileUpdate, user: dict = Depends(get_current_user)):
+    upd = {}
+    if payload.name is not None: upd["name"] = payload.name
+    if payload.picture is not None: upd["picture"] = payload.picture
+    if upd:
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": upd})
+    return await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "password_hash": 0})
 
 # ---------- Users / Administration ----------
 @api.get("/users")

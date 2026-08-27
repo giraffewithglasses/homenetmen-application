@@ -3,21 +3,45 @@ import { useParams, Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Users, Mail, Phone, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
+import { Building2, MapPin, Users, Mail, Phone, ArrowLeft, Pencil } from "lucide-react";
 
 export default function ChapterDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [c, setC] = useState(null);
   const [members, setMembers] = useState([]);
   const [programs, setPrograms] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const [editOpen, setEditOpen] = useState(false);
+  const [form, setForm] = useState({});
 
-  useEffect(() => {
-    api.get(`/chapters/${id}`).then(r => setC(r.data));
+  const load = () => {
+    api.get(`/chapters/${id}`).then(r => { setC(r.data); setForm(r.data); });
     api.get(`/members?chapter_id=${id}`).then(r => setMembers(r.data));
     api.get(`/programs?chapter_id=${id}`).then(r => setPrograms(r.data));
-    api.get("/announcements").then(r => setAnnouncements(r.data.filter(a => a.chapter_id === id).slice(0,3)));
-  }, [id]);
+  };
+  useEffect(() => { load(); }, [id]);
+
+  const canEdit = user?.role === "national_admin" || (user?.role === "chapter_admin" && user?.chapter_id === id);
+
+  const save = async () => {
+    try {
+      const payload = {
+        name: form.name || "", name_hy: form.name_hy || "", location: form.location || "",
+        description: form.description || "", contact_email: form.contact_email || "",
+        contact_phone: form.contact_phone || "", logo: form.logo || "", cover: form.cover || "",
+      };
+      await api.put(`/chapters/${id}`, payload);
+      toast.success("Updated");
+      setEditOpen(false); load();
+    } catch { toast.error("Failed"); }
+  };
 
   if (!c) return <div>Loading…</div>;
 
@@ -29,6 +53,13 @@ export default function ChapterDetail() {
         backgroundImage: "linear-gradient(120deg, hsl(152 43% 15% / 0.92), hsl(149 40% 30% / 0.75)), url('https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?crop=entropy&cs=srgb&fm=jpg&q=85')",
         backgroundSize: "cover", color: "white", border: "none",
       }}>
+        {canEdit && (
+          <Button
+            onClick={() => setEditOpen(true)}
+            className="absolute top-4 right-4 btn-pill bg-white/15 hover:bg-white/25 border border-white/30 text-white h-9"
+            data-testid="edit-chapter-btn"
+          ><Pencil size={14} className="mr-2"/>Edit</Button>
+        )}
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full flex items-center justify-center bg-[hsl(12,65%,63%)] shadow-inner border-2 border-white/30">
             <Building2 size={26} />
@@ -95,6 +126,23 @@ export default function ChapterDetail() {
           ))}
         </div>
       </Card>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Chapter</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div><Label>Name</Label><Input value={form.name || ""} onChange={e => setForm({...form, name: e.target.value})} data-testid="edit-chp-name"/></div>
+            <div><Label>Name (Armenian)</Label><Input value={form.name_hy || ""} onChange={e => setForm({...form, name_hy: e.target.value})}/></div>
+            <div><Label>Location</Label><Input value={form.location || ""} onChange={e => setForm({...form, location: e.target.value})}/></div>
+            <div><Label>Description</Label><Textarea value={form.description || ""} onChange={e => setForm({...form, description: e.target.value})}/></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Email</Label><Input value={form.contact_email || ""} onChange={e => setForm({...form, contact_email: e.target.value})}/></div>
+              <div><Label>Phone</Label><Input value={form.contact_phone || ""} onChange={e => setForm({...form, contact_phone: e.target.value})}/></div>
+            </div>
+            <Button onClick={save} className="btn-pill w-full bg-[hsl(149,40%,30%)]" data-testid="edit-chp-save">Save changes</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
