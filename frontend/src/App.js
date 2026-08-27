@@ -24,6 +24,7 @@ import Notifications from "@/pages/Notifications";
 import Administration from "@/pages/Administration";
 import Profile from "@/pages/Profile";
 import Trash from "@/pages/Trash";
+import CompleteSignup from "@/pages/CompleteSignup";
 import "@/App.css";
 
 function Router() {
@@ -33,6 +34,7 @@ function Router() {
     <Routes>
       <Route path="/" element={<Guest />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/complete-signup" element={<CompleteSignup />} />
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/announcements" element={<Announcements />} />

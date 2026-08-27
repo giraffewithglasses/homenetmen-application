@@ -20,8 +20,9 @@ export default function AuthCallback() {
       try {
         const { data } = await api.post("/auth/session", { session_id: m[1] });
         setUser(data, null);
-        window.history.replaceState(null, "", "/dashboard");
-        nav("/dashboard", { replace: true });
+        const target = (data.status === "profile_incomplete" || data.status === "pending") ? "/complete-signup" : "/dashboard";
+        window.history.replaceState(null, "", target);
+        nav(target, { replace: true });
       } catch (e) {
         nav("/login", { replace: true });
       }

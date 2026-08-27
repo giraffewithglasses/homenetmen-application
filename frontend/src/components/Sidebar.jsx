@@ -8,22 +8,26 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 
+const ALL_ROLES = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader", "scout", "parent"];
+const LEADER_TIER = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader"];
+const NON_SCOUT = [...LEADER_TIER];
+
 const ALL_ITEMS = [
-  { to: "/dashboard", label: "Dashboard", labelHy: "Վահանակ", icon: LayoutDashboard, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
-  { to: "/announcements", label: "News", labelHy: "Նորություններ", icon: Newspaper, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
-  { to: "/newsletters", label: "Newsletters", labelHy: "Տեղեկագիր", icon: Mail, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
-  { to: "/chapters", label: "Chapters", labelHy: "Մասնաճյուղեր", icon: Building2, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
-  { to: "/programs", label: "Programs", labelHy: "Ծրագրեր", icon: Compass, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
-  { to: "/calendar", label: "Calendar", labelHy: "Օրացույց", icon: CalendarDays, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
-  { to: "/badges", label: "Progress Badges", labelHy: "Կրծքանշաններ", icon: Award, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
+  { to: "/dashboard", label: "Dashboard", labelHy: "Վահանակ", icon: LayoutDashboard, roles: ALL_ROLES },
+  { to: "/announcements", label: "News", labelHy: "Նորություններ", icon: Newspaper, roles: ALL_ROLES },
+  { to: "/newsletters", label: "Newsletters", labelHy: "Տեղեկագիր", icon: Mail, roles: ALL_ROLES },
+  { to: "/chapters", label: "Chapters", labelHy: "Մասնաճյուղեր", icon: Building2, roles: ALL_ROLES },
+  { to: "/programs", label: "Programs", labelHy: "Ծրագրեր", icon: Compass, roles: ALL_ROLES },
+  { to: "/calendar", label: "Calendar", labelHy: "Օրացույց", icon: CalendarDays, roles: ALL_ROLES },
+  { to: "/badges", label: "Progress Badges", labelHy: "Կրծքանշաններ", icon: Award, roles: ALL_ROLES },
   { to: "/my-progress", label: "My Progress", labelHy: "Իմ առաջընթացը", icon: TrendingUp, roles: ["scout"] },
-  { to: "/members", label: "Members", labelHy: "Անդամներ", icon: Users, roles: ["national_admin", "chapter_admin", "chapter_leader"] },
-  { to: "/attendance", label: "Attendance", labelHy: "Հաճախում", icon: ClipboardCheck, roles: ["national_admin", "chapter_admin", "chapter_leader"] },
-  { to: "/resources", label: "Resources", labelHy: "Ռեսուրսներ", icon: Folder, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
-  { to: "/notifications", label: "Notifications", labelHy: "Ծանուցումներ", icon: Bell, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
-  { to: "/administration", label: "Administration", labelHy: "Կառավարում", icon: Settings, roles: ["national_admin", "chapter_admin"] },
+  { to: "/members", label: "Members", labelHy: "Անդամներ", icon: Users, roles: NON_SCOUT },
+  { to: "/attendance", label: "Attendance", labelHy: "Հաճախում", icon: ClipboardCheck, roles: NON_SCOUT },
+  { to: "/resources", label: "Resources", labelHy: "Ռեսուրսներ", icon: Folder, roles: ALL_ROLES },
+  { to: "/notifications", label: "Notifications", labelHy: "Ծանուցումներ", icon: Bell, roles: ALL_ROLES },
+  { to: "/administration", label: "Administration", labelHy: "Կառավարում", icon: Settings, roles: LEADER_TIER },
   { to: "/trash", label: "Trash Bin", labelHy: "Աղբարկղ", icon: Trash2, roles: ["national_admin", "chapter_admin"] },
-  { to: "/profile", label: "Profile", labelHy: "Պրոֆիլ", icon: UserCircle, roles: ["national_admin", "chapter_admin", "chapter_leader", "scout"] },
+  { to: "/profile", label: "Profile", labelHy: "Պրոֆիլ", icon: UserCircle, roles: ALL_ROLES },
 ];
 
 export default function Sidebar({ mobileOpen, setMobileOpen, lang }) {

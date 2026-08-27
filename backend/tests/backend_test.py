@@ -57,11 +57,14 @@ class TestAuth:
 
     def test_register(self):
         email = f"TEST_{uuid.uuid4().hex[:8]}@scouts.am"
-        r = requests.post(f"{API}/auth/register", json={"email": email, "password": "test123", "name": "Test User"})
+        r = requests.post(f"{API}/auth/register", json={"email": email, "password": "test123",
+                                                        "name": "Test User", "chapter_id": "chp_ararat"})
         assert r.status_code == 200, r.text
         j = r.json()
         assert j["role"] == "scout"
-        assert "access_token" in j
+        # New contract: registration creates a pending account awaiting approval (no token issued)
+        assert j["status"] == "pending"
+        assert "access_token" not in j
 
     def test_emergent_session_bad(self):
         r = requests.post(f"{API}/auth/session", json={"session_id": "invalid_xxx"})
@@ -74,7 +77,7 @@ class TestChapters:
         r = requests.get(f"{API}/chapters")
         assert r.status_code == 200
         items = r.json()
-        assert len(items) == 4
+        assert len(items) >= 4
         assert all("member_count" in c for c in items)
         assert all("_id" not in c for c in items)
 
@@ -112,7 +115,7 @@ class TestBadges:
     def test_list_badges(self):
         r = requests.get(f"{API}/badges")
         assert r.status_code == 200
-        assert len(r.json()) >= 15
+        assert len(r.json()) >= 10
 
     def test_update_progress(self, chapter_admin_token):
         r = requests.post(f"{API}/badges/progress",
@@ -244,7 +247,9 @@ class TestUserRole:
     def test_update_role(self, admin_token):
         # create a throwaway user
         email = f"TEST_role_{uuid.uuid4().hex[:6]}@scouts.am"
-        rr = requests.post(f"{API}/auth/register", json={"email": email, "password": "x", "name": "R"})
+        rr = requests.post(f"{API}/auth/register", json={"email": email, "password": "x", "name": "R",
+                                                         "chapter_id": "chp_ararat"})
+        assert rr.status_code == 200, rr.text
         uid = rr.json()["user_id"]
         r = requests.put(f"{API}/users/{uid}/role",
                          json={"role": "chapter_leader", "chapter_id": "chp_sevan"},

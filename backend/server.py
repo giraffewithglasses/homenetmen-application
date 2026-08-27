@@ -116,6 +116,22 @@ def require_roles(*roles):
         return user
     return _dep
 
+LEADER_ROLES = ("chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader")
+ADMIN_ROLES = ("national_admin", "chapter_admin")
+STAFF_ROLES = ("national_admin",) + LEADER_ROLES  # anyone who can manage stuff for a chapter
+
+def is_leader(role: str) -> bool:
+    return role in LEADER_ROLES or role == "national_admin"
+
+POSITION_TO_ROLE = {
+    "Chapter Admin": "chapter_admin",
+    "Chapter Leader": "chapter_leader",
+    "Scout Leader": "scout_leader",
+    "Cubs Leader": "cubs_leader",
+    "Patrol Leader": "patrol_leader",
+    "Patrol Co-Leader": "patrol_co_leader",
+}
+
 async def audit(user: dict, action: str, entity: str, entity_id: str = "", meta: dict = None):
     await db.audit_logs.insert_one({
         "log_id": new_id("log"),
@@ -151,7 +167,19 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str
     name: str
-    chapter_id: Optional[str] = None
+    chapter_id: str  # required — chapter to join
+    signup_type: str = "scout"  # "scout" | "leader"
+    requested_role: Optional[str] = "scout"
+    # scout profile (only used when signup_type == "scout")
+    full_name_hy: Optional[str] = ""
+    dob: Optional[str] = ""
+    gender: Optional[str] = ""
+    phone: Optional[str] = ""
+    section: Optional[str] = "Scouts"
+    patrol: Optional[str] = ""
+    guardian_name: Optional[str] = ""
+    guardian_phone: Optional[str] = ""
+    emergency_contact: Optional[str] = ""
 
 class LoginIn(BaseModel):
     email: EmailStr
@@ -211,9 +239,13 @@ class ProgramIn(BaseModel):
     end_time: str = ""
     location: str = ""
     section: str = "Scouts"
+    sections: List[str] = []  # multi-section support: Cubs, Scouts, Senior Scouts, Rovers
+    level: str = "chapter"  # chapter | regional | national
     chapter_id: Optional[str] = None  # None = national
     leaders: List[str] = []
     expected_participants: int = 0
+    capacity: int = 0  # 0 = unlimited
+    waitlist_enabled: bool = False
     materials: str = ""
     objectives: str = ""
     related_badges: List[str] = []
@@ -320,18 +352,64 @@ async def register(payload: RegisterIn, response: Response):
     email = payload.email.lower()
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email already registered")
+    chapter = await db.chapters.find_one({"chapter_id": payload.chapter_id})
+    if not chapter:
+        raise HTTPException(400, "Invalid chapter")
+    is_leader_signup = payload.signup_type == "leader"
     uid = new_id("usr")
+    pending_member = None
+    if not is_leader_signup:
+        # scout signup — stash a pending member profile keyed to the pending user
+        pending_member = {
+            "full_name": payload.name,
+            "full_name_hy": payload.full_name_hy or "",
+            "email": email,
+            "phone": payload.phone or "",
+            "dob": payload.dob or "",
+            "gender": payload.gender or "",
+            "chapter_id": payload.chapter_id,
+            "section": payload.section or "Scouts",
+            "patrol": payload.patrol or "",
+            "guardian_name": payload.guardian_name or "",
+            "guardian_phone": payload.guardian_phone or "",
+            "emergency_contact": payload.emergency_contact or "",
+            "membership_start": now_iso()[:10],
+            "position": "Member",
+            "status": "active",
+            "notes": "",
+            "photo": "",
+        }
     doc = {
         "user_id": uid, "email": email, "name": payload.name,
         "password_hash": hash_password(payload.password),
         "role": "scout", "chapter_id": payload.chapter_id,
-        "picture": "", "created_at": now_iso(),
+        "picture": "", "status": "pending",
+        "signup_type": payload.signup_type,
+        "requested_role": (payload.requested_role or "scout") if is_leader_signup else "scout",
+        "pending_member_profile": pending_member,
+        "created_at": now_iso(),
     }
     await db.users.insert_one(doc)
-    access, refresh = create_access_token(uid, email), create_refresh_token(uid)
-    set_auth_cookies(response, access, refresh)
-    return {"user_id": uid, "email": email, "name": payload.name, "role": "scout",
-            "chapter_id": payload.chapter_id, "access_token": access}
+    # Notify chapter approvers + national admins
+    approvers = await db.users.find(
+        {"$or": [
+            {"role": "national_admin"},
+            {"role": {"$in": list(LEADER_ROLES)}, "chapter_id": payload.chapter_id},
+        ]},
+        {"user_id": 1}
+    ).to_list(200)
+    title = "New leader application" if is_leader_signup else "New scout signup"
+    await notify(
+        [u["user_id"] for u in approvers], title,
+        f"{payload.name} ({email}) requested to join {chapter['name']}.",
+        "info", "/administration",
+    )
+    return {
+        "user_id": uid, "email": email, "name": payload.name,
+        "role": "scout", "chapter_id": payload.chapter_id,
+        "status": "pending", "signup_type": payload.signup_type,
+        "message": "Registration submitted. A chapter leader will review and approve your account shortly.",
+    }
 
 @api.post("/auth/login")
 async def login(payload: LoginIn, response: Response):
@@ -339,11 +417,18 @@ async def login(payload: LoginIn, response: Response):
     u = await db.users.find_one({"email": email})
     if not u or not u.get("password_hash") or not verify_password(payload.password, u["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
+    if u.get("status") == "pending":
+        raise HTTPException(403, "Your account is awaiting chapter leader approval.")
+    if u.get("status") == "rejected":
+        raise HTTPException(403, "Your registration was not approved. Please contact your chapter.")
+    if u.get("status") == "archived":
+        raise HTTPException(403, "Your account has been archived. Please contact your chapter.")
     access = create_access_token(u["user_id"], email)
     refresh = create_refresh_token(u["user_id"])
     set_auth_cookies(response, access, refresh)
     return {"user_id": u["user_id"], "email": email, "name": u["name"], "role": u["role"],
             "chapter_id": u.get("chapter_id"), "picture": u.get("picture", ""),
+            "status": u.get("status", "active"),
             "access_token": access}
 
 @api.post("/auth/logout")
@@ -385,7 +470,10 @@ async def emergent_session(payload: SessionIn, response: Response):
         await db.users.insert_one({
             "user_id": uid, "email": email, "name": data.get("name", email),
             "picture": data.get("picture", ""), "role": "scout",
-            "chapter_id": None, "created_at": now_iso(),
+            "chapter_id": None,
+            "status": "profile_incomplete",  # must complete signup before use
+            "signup_type": "scout",
+            "created_at": now_iso(),
         })
     session_token = data["session_token"]
     await db.user_sessions.insert_one({
@@ -399,6 +487,72 @@ async def emergent_session(payload: SessionIn, response: Response):
                         samesite="none", max_age=7*86400, path="/")
     u = await db.users.find_one({"user_id": uid}, {"_id": 0, "password_hash": 0})
     return u
+
+class CompleteProfileIn(BaseModel):
+    chapter_id: str
+    signup_type: str = "scout"  # scout | leader
+    requested_role: Optional[str] = "scout"
+    # scout profile
+    full_name_hy: Optional[str] = ""
+    dob: Optional[str] = ""
+    gender: Optional[str] = ""
+    phone: Optional[str] = ""
+    section: Optional[str] = "Scouts"
+    patrol: Optional[str] = ""
+    guardian_name: Optional[str] = ""
+    guardian_phone: Optional[str] = ""
+    emergency_contact: Optional[str] = ""
+
+@api.post("/auth/complete-profile")
+async def complete_profile(payload: CompleteProfileIn, user: dict = Depends(get_current_user)):
+    if user.get("status") not in ("profile_incomplete", "pending"):
+        raise HTTPException(400, "Profile already complete")
+    chapter = await db.chapters.find_one({"chapter_id": payload.chapter_id})
+    if not chapter:
+        raise HTTPException(400, "Invalid chapter")
+    is_leader_signup = payload.signup_type == "leader"
+    upd = {
+        "chapter_id": payload.chapter_id,
+        "status": "pending",
+        "signup_type": payload.signup_type,
+        "requested_role": (payload.requested_role or "scout") if is_leader_signup else "scout",
+    }
+    if not is_leader_signup:
+        upd["pending_member_profile"] = {
+            "full_name": user["name"],
+            "full_name_hy": payload.full_name_hy or "",
+            "email": user["email"],
+            "phone": payload.phone or "",
+            "dob": payload.dob or "",
+            "gender": payload.gender or "",
+            "chapter_id": payload.chapter_id,
+            "section": payload.section or "Scouts",
+            "patrol": payload.patrol or "",
+            "guardian_name": payload.guardian_name or "",
+            "guardian_phone": payload.guardian_phone or "",
+            "emergency_contact": payload.emergency_contact or "",
+            "membership_start": now_iso()[:10],
+            "position": "Member",
+            "status": "active",
+            "notes": "",
+            "photo": "",
+        }
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": upd})
+    # Notify chapter approvers + national admins
+    approvers = await db.users.find(
+        {"$or": [
+            {"role": "national_admin"},
+            {"role": {"$in": list(LEADER_ROLES)}, "chapter_id": payload.chapter_id},
+        ]},
+        {"user_id": 1}
+    ).to_list(200)
+    title = "New leader application" if is_leader_signup else "New scout signup"
+    await notify(
+        [u["user_id"] for u in approvers], title,
+        f"{user['name']} ({user['email']}) requested to join {chapter['name']}.",
+        "info", "/administration",
+    )
+    return {"ok": True, "status": "pending"}
 
 # ---------- Chapters ----------
 @api.get("/chapters")
@@ -456,7 +610,7 @@ async def unarchive_chapter(chapter_id: str, user: dict = Depends(require_roles(
 def _member_chapter_guard(user: dict, chapter_id: str):
     if user["role"] == "national_admin":
         return
-    if user["role"] in ("chapter_admin", "chapter_leader") and user.get("chapter_id") == chapter_id:
+    if user["role"] in LEADER_ROLES and user.get("chapter_id") == chapter_id:
         return
     raise HTTPException(403, "Not allowed for this chapter")
 
@@ -562,7 +716,7 @@ async def member_badges(member_id: str, user: dict = Depends(get_current_user)):
 
 @api.post("/badges/progress")
 async def update_progress(payload: RequirementUpdate, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("national_admin", "chapter_admin", "chapter_leader"):
+    if not is_leader(user["role"]):
         raise HTTPException(403, "Not allowed")
     badge = await db.badges.find_one({"badge_id": payload.badge_id})
     if not badge: raise HTTPException(404, "Badge not found")
@@ -592,7 +746,7 @@ async def update_progress(payload: RequirementUpdate, user: dict = Depends(get_c
 
 @api.post("/badges/award")
 async def award_badge(payload: BadgeAwardIn, user: dict = Depends(get_current_user)):
-    if user["role"] not in ("national_admin", "chapter_admin", "chapter_leader"):
+    if not is_leader(user["role"]):
         raise HTTPException(403, "Not allowed")
     badge = await db.badges.find_one({"badge_id": payload.badge_id})
     if not badge: raise HTTPException(404, "Badge not found")
@@ -629,10 +783,22 @@ async def list_programs(chapter_id: Optional[str] = None, user: dict = Depends(g
     q: dict = {}
     if user["role"] == "national_admin":
         if chapter_id: q["chapter_id"] = chapter_id
+    elif user["role"] == "parent":
+        # Parents see all national + programs of their linked members' chapters
+        member_ids = user.get("linked_member_ids") or []
+        chapter_ids = []
+        if member_ids:
+            members = await db.members.find({"member_id": {"$in": member_ids}}, {"chapter_id": 1}).to_list(50)
+            chapter_ids = list({m["chapter_id"] for m in members if m.get("chapter_id")})
+        q = {"$or": [{"chapter_id": None}, {"chapter_id": {"$in": chapter_ids}}]} if chapter_ids else {"chapter_id": None}
     else:
         # national programs (chapter_id null) + user's chapter programs
         q = {"$or": [{"chapter_id": None}, {"chapter_id": user.get("chapter_id")}]}
     items = await db.programs.find(q, {"_id": 0}).sort("date", 1).to_list(500)
+    # attach registration counts
+    for it in items:
+        it["registered_count"] = await db.program_registrations.count_documents({"program_id": it["program_id"], "status": "registered"})
+        it["waitlist_count"] = await db.program_registrations.count_documents({"program_id": it["program_id"], "status": "waitlisted"})
     return items
 
 @api.get("/programs/{program_id}")
@@ -643,13 +809,15 @@ async def get_program(program_id: str):
 
 @api.post("/programs")
 async def create_program(payload: ProgramIn, user: dict = Depends(get_current_user)):
-    if user["role"] == "scout":
+    if not is_leader(user["role"]):
         raise HTTPException(403, "Not allowed")
-    if user["role"] in ("chapter_admin", "chapter_leader"):
-        payload_dict = payload.model_dump()
+    payload_dict = payload.model_dump()
+    # Level-based chapter assignment
+    if payload_dict.get("level") in ("national", "regional") and user["role"] == "national_admin":
+        payload_dict["chapter_id"] = None
+    elif user["role"] in LEADER_ROLES:
         payload_dict["chapter_id"] = user.get("chapter_id")
-    else:
-        payload_dict = payload.model_dump()
+        payload_dict["level"] = "chapter"
     pid = new_id("prg")
     doc = {"program_id": pid, **payload_dict, "created_by": user["email"], "created_at": now_iso()}
     await db.programs.insert_one(doc)
@@ -660,8 +828,8 @@ async def create_program(payload: ProgramIn, user: dict = Depends(get_current_us
 async def update_program(program_id: str, payload: ProgramIn, user: dict = Depends(get_current_user)):
     p = await db.programs.find_one({"program_id": program_id})
     if not p: raise HTTPException(404, "Not found")
-    if user["role"] == "scout": raise HTTPException(403, "Not allowed")
-    if user["role"] in ("chapter_admin", "chapter_leader") and p.get("chapter_id") != user.get("chapter_id"):
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
+    if user["role"] in LEADER_ROLES and p.get("chapter_id") != user.get("chapter_id"):
         raise HTTPException(403, "Not allowed for other chapters")
     await db.programs.update_one({"program_id": program_id}, {"$set": payload.model_dump()})
     await audit(user, "update", "program", program_id)
@@ -669,14 +837,15 @@ async def update_program(program_id: str, payload: ProgramIn, user: dict = Depen
 
 @api.delete("/programs/{program_id}")
 async def delete_program(program_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] == "scout": raise HTTPException(403, "Not allowed")
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
     await db.programs.delete_one({"program_id": program_id})
+    await db.program_registrations.delete_many({"program_id": program_id})
     await audit(user, "delete", "program", program_id)
     return {"ok": True}
 
 @api.post("/programs/{program_id}/duplicate")
 async def duplicate_program(program_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] == "scout": raise HTTPException(403, "Not allowed")
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
     p = await db.programs.find_one({"program_id": program_id}, {"_id": 0})
     if not p: raise HTTPException(404, "Not found")
     p["program_id"] = new_id("prg")
@@ -685,10 +854,64 @@ async def duplicate_program(program_id: str, user: dict = Depends(get_current_us
     await db.programs.insert_one(p)
     return clean(p)
 
+# ---------- Event Registration ----------
+@api.get("/programs/{program_id}/registrations")
+async def list_registrations(program_id: str, user: dict = Depends(get_current_user)):
+    regs = await db.program_registrations.find({"program_id": program_id}, {"_id": 0}).sort("created_at", 1).to_list(1000)
+    return regs
+
+@api.get("/programs/{program_id}/my-registration")
+async def my_registration(program_id: str, user: dict = Depends(get_current_user)):
+    reg = await db.program_registrations.find_one({"program_id": program_id, "user_id": user["user_id"]}, {"_id": 0})
+    return reg or {"status": "none"}
+
+@api.post("/programs/{program_id}/register")
+async def register_for_program(program_id: str, user: dict = Depends(get_current_user)):
+    p = await db.programs.find_one({"program_id": program_id})
+    if not p: raise HTTPException(404, "Program not found")
+    existing = await db.program_registrations.find_one({"program_id": program_id, "user_id": user["user_id"]})
+    if existing:
+        return {"status": existing["status"], "message": "Already registered"}
+    capacity = int(p.get("capacity") or 0)
+    current = await db.program_registrations.count_documents({"program_id": program_id, "status": "registered"})
+    if capacity and current >= capacity:
+        if not p.get("waitlist_enabled"):
+            raise HTTPException(400, "Event is full")
+        status = "waitlisted"
+    else:
+        status = "registered"
+    m = await db.members.find_one({"email": user["email"]}, {"member_id": 1, "full_name": 1})
+    doc = {
+        "reg_id": new_id("reg"),
+        "program_id": program_id,
+        "user_id": user["user_id"],
+        "user_email": user["email"],
+        "user_name": user.get("name"),
+        "member_id": m.get("member_id") if m else None,
+        "status": status,
+        "created_at": now_iso(),
+    }
+    await db.program_registrations.insert_one(doc)
+    await audit(user, "register", "program", program_id, {"status": status})
+    return {"status": status}
+
+@api.delete("/programs/{program_id}/register")
+async def unregister_from_program(program_id: str, user: dict = Depends(get_current_user)):
+    r = await db.program_registrations.find_one({"program_id": program_id, "user_id": user["user_id"]})
+    await db.program_registrations.delete_one({"program_id": program_id, "user_id": user["user_id"]})
+    # Promote first waitlisted user if we freed a spot
+    if r and r.get("status") == "registered":
+        wl = await db.program_registrations.find_one({"program_id": program_id, "status": "waitlisted"}, sort=[("created_at", 1)])
+        if wl:
+            await db.program_registrations.update_one({"reg_id": wl["reg_id"]}, {"$set": {"status": "registered"}})
+            await notify([wl["user_id"]], "Waitlist promoted!", "A spot opened up — you're now registered.", "success", "/programs")
+    await audit(user, "unregister", "program", program_id)
+    return {"ok": True}
+
 # ---------- Attendance ----------
 @api.post("/attendance")
 async def record_attendance(payload: AttendanceIn, user: dict = Depends(get_current_user)):
-    if user["role"] == "scout": raise HTTPException(403, "Not allowed")
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
     p = await db.programs.find_one({"program_id": payload.program_id})
     if not p: raise HTTPException(404, "Program not found")
     for e in payload.entries:
@@ -745,9 +968,9 @@ async def list_announcements(user: dict = Depends(get_current_user)):
 
 @api.post("/announcements")
 async def create_announcement(payload: AnnouncementIn, user: dict = Depends(get_current_user)):
-    if user["role"] == "scout": raise HTTPException(403, "Not allowed")
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
     data = payload.model_dump()
-    if user["role"] in ("chapter_admin", "chapter_leader"):
+    if user["role"] in LEADER_ROLES:
         data["chapter_id"] = user.get("chapter_id")
     aid = new_id("ann")
     doc = {"announcement_id": aid, **data, "author": user["email"], "created_at": now_iso()}
@@ -765,8 +988,8 @@ async def create_announcement(payload: AnnouncementIn, user: dict = Depends(get_
 async def delete_announcement(aid: str, user: dict = Depends(get_current_user)):
     a = await db.announcements.find_one({"announcement_id": aid})
     if not a: raise HTTPException(404, "Not found")
-    if user["role"] == "scout": raise HTTPException(403, "Not allowed")
-    if user["role"] in ("chapter_admin", "chapter_leader") and a.get("chapter_id") != user.get("chapter_id"):
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
+    if user["role"] in LEADER_ROLES and a.get("chapter_id") != user.get("chapter_id"):
         raise HTTPException(403, "Not allowed")
     await db.announcements.delete_one({"announcement_id": aid})
     return {"ok": True}
@@ -786,7 +1009,7 @@ async def get_resource(rid: str, user: dict = Depends(get_current_user)):
 
 @api.post("/resources")
 async def create_resource(payload: ResourceIn, user: dict = Depends(get_current_user)):
-    if user["role"] == "scout": raise HTTPException(403, "Not allowed")
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
     rid = new_id("res")
     doc = {"resource_id": rid, **payload.model_dump(), "uploaded_by": user["email"], "created_at": now_iso()}
     await db.resources.insert_one(doc)
@@ -879,11 +1102,83 @@ async def trash_bin(user: dict = Depends(require_roles("national_admin", "chapte
 
 # ---------- Users / Administration ----------
 @api.get("/users")
-async def list_users(user: dict = Depends(require_roles("national_admin", "chapter_admin"))):
+async def list_users(status: Optional[str] = None, include_scouts: bool = False, user: dict = Depends(require_roles("national_admin", "chapter_admin"))):
     q = {}
     if user["role"] == "chapter_admin":
         q["chapter_id"] = user.get("chapter_id")
+    if status:
+        q["status"] = status
+    else:
+        # by default hide archived
+        q["status"] = {"$ne": "archived"}
+    if not include_scouts:
+        q["role"] = {"$ne": "scout"}
     return await db.users.find(q, {"_id": 0, "password_hash": 0}).to_list(1000)
+
+@api.get("/users/pending")
+async def list_pending_users(user: dict = Depends(get_current_user)):
+    # National admin sees all pending; chapter approvers see pending for their chapter
+    if user["role"] == "national_admin":
+        q = {"status": "pending"}
+    elif user["role"] in LEADER_ROLES:
+        q = {"status": "pending", "chapter_id": user.get("chapter_id")}
+    else:
+        raise HTTPException(403, "Not allowed")
+    return await db.users.find(q, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
+
+@api.post("/users/{uid}/approve")
+async def approve_user(uid: str, user: dict = Depends(get_current_user)):
+    target = await db.users.find_one({"user_id": uid})
+    if not target: raise HTTPException(404, "Not found")
+    if user["role"] == "national_admin":
+        pass
+    elif user["role"] in LEADER_ROLES and target.get("chapter_id") == user.get("chapter_id"):
+        pass
+    else:
+        raise HTTPException(403, "Not allowed to approve this user")
+    signup_type = target.get("signup_type", "scout")
+    if signup_type == "leader":
+        role = target.get("requested_role") or "scout"
+        if role == "national_admin" and user["role"] != "national_admin":
+            role = "scout"
+    else:
+        role = "scout"
+    upd = {"status": "active", "role": role, "approved_by": user["email"], "approved_at": now_iso()}
+    await db.users.update_one({"user_id": uid}, {"$set": upd})
+
+    # If scout signup with a pending member profile, materialize it
+    if signup_type == "scout" and target.get("pending_member_profile"):
+        prof = dict(target["pending_member_profile"])
+        # only create if not already linked
+        already = await db.members.find_one({"email": target["email"]})
+        if not already:
+            mid = new_id("mbr")
+            prof.update({
+                "member_id": mid,
+                "created_at": now_iso(),
+            })
+            await db.members.insert_one(prof)
+            await audit(user, "materialize", "member", mid, {"from_user": uid})
+        # clear the pending profile
+        await db.users.update_one({"user_id": uid}, {"$unset": {"pending_member_profile": ""}})
+
+    await notify([uid], "Welcome to Scouts!", "Your account has been approved. You can sign in now.", "success", "/dashboard")
+    await audit(user, "approve", "user", uid, {"signup_type": signup_type})
+    return {"ok": True}
+
+@api.post("/users/{uid}/reject")
+async def reject_user(uid: str, user: dict = Depends(get_current_user)):
+    target = await db.users.find_one({"user_id": uid})
+    if not target: raise HTTPException(404, "Not found")
+    if user["role"] == "national_admin":
+        pass
+    elif user["role"] in LEADER_ROLES and target.get("chapter_id") == user.get("chapter_id"):
+        pass
+    else:
+        raise HTTPException(403, "Not allowed")
+    await db.users.update_one({"user_id": uid}, {"$set": {"status": "rejected", "rejected_by": user["email"], "rejected_at": now_iso()}})
+    await audit(user, "reject", "user", uid)
+    return {"ok": True}
 
 class UserRoleUpdate(BaseModel):
     role: str
@@ -894,6 +1189,132 @@ async def update_role(uid: str, payload: UserRoleUpdate, user: dict = Depends(re
     await db.users.update_one({"user_id": uid}, {"$set": {"role": payload.role, "chapter_id": payload.chapter_id}})
     await audit(user, "role_change", "user", uid, {"role": payload.role})
     return await db.users.find_one({"user_id": uid}, {"_id": 0, "password_hash": 0})
+
+@api.post("/users/{uid}/archive")
+async def archive_user(uid: str, user: dict = Depends(get_current_user)):
+    target = await db.users.find_one({"user_id": uid})
+    if not target: raise HTTPException(404, "Not found")
+    if user["role"] == "national_admin":
+        pass
+    elif user["role"] == "chapter_admin" and target.get("chapter_id") == user.get("chapter_id"):
+        pass
+    else:
+        raise HTTPException(403, "Not allowed")
+    if uid == user["user_id"]:
+        raise HTTPException(400, "Cannot archive your own account")
+    await db.users.update_one({"user_id": uid}, {"$set": {"status": "archived"}})
+    await audit(user, "archive", "user", uid)
+    return {"ok": True}
+
+@api.post("/users/{uid}/unarchive")
+async def unarchive_user(uid: str, user: dict = Depends(require_roles("national_admin", "chapter_admin"))):
+    await db.users.update_one({"user_id": uid}, {"$set": {"status": "active"}})
+    await audit(user, "unarchive", "user", uid)
+    return {"ok": True}
+
+@api.delete("/users/{uid}")
+async def delete_user(uid: str, user: dict = Depends(require_roles("national_admin"))):
+    if uid == user["user_id"]:
+        raise HTTPException(400, "Cannot delete your own account")
+    await db.users.delete_one({"user_id": uid})
+    await audit(user, "delete", "user", uid)
+    return {"ok": True}
+
+class SyncRoleIn(BaseModel):
+    apply: bool = False  # False → returns suggestion, True → performs upgrade
+
+@api.post("/members/{member_id}/sync-user-role")
+async def sync_member_user_role(member_id: str, payload: SyncRoleIn, user: dict = Depends(get_current_user)):
+    m = await db.members.find_one({"member_id": member_id})
+    if not m: raise HTTPException(404, "Not found")
+    _member_chapter_guard(user, m["chapter_id"])
+    if not m.get("email"):
+        return {"linked": False, "reason": "Member has no email"}
+    linked = await db.users.find_one({"email": (m["email"] or "").lower()}, {"_id": 0, "password_hash": 0})
+    if not linked:
+        return {"linked": False, "reason": "No user account with this email"}
+    target_role = POSITION_TO_ROLE.get(m.get("position", ""), "scout")
+    if target_role == "chapter_admin" and user["role"] != "national_admin":
+        target_role = "chapter_leader"  # downgrade if non-national tries to make chapter_admin
+    suggestion = {
+        "linked": True,
+        "user_id": linked["user_id"],
+        "current_role": linked.get("role"),
+        "suggested_role": target_role,
+        "needs_change": linked.get("role") != target_role,
+    }
+    if payload.apply and suggestion["needs_change"]:
+        if target_role == "national_admin" and user["role"] != "national_admin":
+            raise HTTPException(403, "Only national admin can grant national_admin")
+        await db.users.update_one({"user_id": linked["user_id"]}, {"$set": {"role": target_role, "chapter_id": m["chapter_id"]}})
+        await audit(user, "role_sync", "user", linked["user_id"], {"role": target_role, "member": member_id})
+        suggestion["applied"] = True
+        suggestion["current_role"] = target_role
+    return suggestion
+
+# ---------- Parent Accounts ----------
+import secrets as _secrets
+
+class InviteParentIn(BaseModel):
+    email: EmailStr
+    name: Optional[str] = ""
+
+@api.post("/members/{member_id}/invite-parent")
+async def invite_parent(member_id: str, payload: InviteParentIn, user: dict = Depends(get_current_user)):
+    m = await db.members.find_one({"member_id": member_id})
+    if not m: raise HTTPException(404, "Not found")
+    _member_chapter_guard(user, m["chapter_id"])
+    email = payload.email.lower()
+    existing = await db.users.find_one({"email": email})
+    temp_password = None
+    if existing:
+        uid = existing["user_id"]
+        linked = list(set((existing.get("linked_member_ids") or []) + [member_id]))
+        upd = {"linked_member_ids": linked}
+        if existing.get("role") not in ("national_admin",) + LEADER_ROLES:
+            upd["role"] = "parent"; upd["status"] = "active"
+        await db.users.update_one({"user_id": uid}, {"$set": upd})
+    else:
+        uid = new_id("usr")
+        temp_password = _secrets.token_urlsafe(8)
+        await db.users.insert_one({
+            "user_id": uid, "email": email, "name": payload.name or email.split("@")[0],
+            "password_hash": hash_password(temp_password),
+            "role": "parent", "chapter_id": m["chapter_id"],
+            "linked_member_ids": [member_id],
+            "picture": "", "status": "active",
+            "created_at": now_iso(),
+        })
+    await db.members.update_one({"member_id": member_id}, {"$set": {"parent_email": email}})
+    await audit(user, "invite_parent", "member", member_id, {"parent_email": email})
+    return {"ok": True, "user_id": uid, "temp_password": temp_password}
+
+@api.get("/parent/children")
+async def parent_children(user: dict = Depends(require_roles("parent"))):
+    ids = user.get("linked_member_ids") or []
+    if not ids: return {"children": []}
+    kids = await db.members.find({"member_id": {"$in": ids}}, {"_id": 0}).to_list(50)
+    all_badges = await db.badges.find({}, {"_id": 0}).to_list(500)
+    b_by_id = {b["badge_id"]: b for b in all_badges}
+    today = datetime.now(timezone.utc).date().isoformat()
+    for k in kids:
+        mbs = await db.member_badges.find({"member_id": k["member_id"]}, {"_id": 0}).to_list(500)
+        for mb in mbs:
+            mb["badge"] = b_by_id.get(mb["badge_id"])
+        k["badges"] = mbs
+        k["awarded_count"] = sum(1 for x in mbs if x.get("awarded"))
+        # next activity: any upcoming program at this chapter or national
+        prg = await db.programs.find(
+            {"$or": [{"chapter_id": None}, {"chapter_id": k.get("chapter_id")}], "date": {"$gte": today}},
+            {"_id": 0}
+        ).sort("date", 1).limit(1).to_list(1)
+        k["next_activity"] = prg[0] if prg else None
+        # attendance stats
+        att = await db.attendance.find({"member_id": k["member_id"]}, {"_id": 0}).sort("date", -1).to_list(200)
+        k["attendance"] = att
+        present = sum(1 for a in att if a.get("status") == "present")
+        k["attendance_percent"] = round(present / len(att) * 100, 1) if att else 0
+    return {"children": kids}
 
 @api.get("/audit-logs")
 async def audit_logs(user: dict = Depends(require_roles("national_admin"))):
@@ -1010,15 +1431,15 @@ async def seed():
     # Users
     users_data = [
         {"user_id": "usr_admin", "email": admin_email, "name": "National Administrator",
-         "password_hash": hash_password(admin_password), "role": "national_admin", "chapter_id": None, "picture": "", "created_at": now_iso()},
+         "password_hash": hash_password(admin_password), "role": "national_admin", "chapter_id": None, "picture": "", "status": "active", "created_at": now_iso()},
         {"user_id": "usr_ararat_admin", "email": "ararat.leader@scouts.am", "name": "Anahit Sargsyan",
-         "password_hash": hash_password("scout123"), "role": "chapter_admin", "chapter_id": "chp_ararat", "picture": "", "created_at": now_iso()},
+         "password_hash": hash_password("scout123"), "role": "chapter_admin", "chapter_id": "chp_ararat", "picture": "", "status": "active", "created_at": now_iso()},
         {"user_id": "usr_sevan_leader", "email": "sevan.leader@scouts.am", "name": "Davit Petrosyan",
-         "password_hash": hash_password("scout123"), "role": "chapter_leader", "chapter_id": "chp_sevan", "picture": "", "created_at": now_iso()},
+         "password_hash": hash_password("scout123"), "role": "chapter_leader", "chapter_id": "chp_sevan", "picture": "", "status": "active", "created_at": now_iso()},
         {"user_id": "usr_gyumri_admin", "email": "gyumri.leader@scouts.am", "name": "Mher Grigoryan",
-         "password_hash": hash_password("scout123"), "role": "chapter_admin", "chapter_id": "chp_gyumri", "picture": "", "created_at": now_iso()},
+         "password_hash": hash_password("scout123"), "role": "chapter_admin", "chapter_id": "chp_gyumri", "picture": "", "status": "active", "created_at": now_iso()},
         {"user_id": "usr_narek", "email": "narek@scouts.am", "name": "Narek Hovhannisyan",
-         "password_hash": hash_password("scout123"), "role": "scout", "chapter_id": "chp_ararat", "picture": "", "created_at": now_iso()},
+         "password_hash": hash_password("scout123"), "role": "scout", "chapter_id": "chp_ararat", "picture": "", "status": "active", "created_at": now_iso()},
     ]
     await db.users.insert_many(users_data)
 

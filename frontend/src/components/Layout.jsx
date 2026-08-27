@@ -13,6 +13,12 @@ export default function Layout() {
 
   if (loading) return <div className="flex items-center justify-center min-h-screen">Loading…</div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (user.status === "profile_incomplete" || (user.status === "pending" && !user.chapter_id)) {
+    return <Navigate to="/complete-signup" replace />;
+  }
+  if (user.status === "pending") {
+    return <Navigate to="/complete-signup" replace />;
+  }
 
   return (
     <div className="flex min-h-screen">

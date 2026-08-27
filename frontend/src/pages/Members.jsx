@@ -13,10 +13,26 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { confirmWithUndo } from "@/lib/undo";
-import { Plus, Download, Search, Archive, Pencil } from "lucide-react";
+import { Plus, Download, Search, Archive, Pencil, UserPlus } from "lucide-react";
 
 const SECTIONS = ["Cubs", "Scouts", "Senior Scouts", "Rovers"];
-const POSITIONS = ["Member", "Assistant Patrol Leader", "Patrol Leader", "Chapter Leader", "Chapter Admin"];
+const POSITIONS = [
+  "Member",
+  "Patrol Co-Leader",
+  "Patrol Leader",
+  "Cubs Leader",
+  "Scout Leader",
+  "Chapter Leader",
+  "Chapter Admin",
+];
+
+const ROLE_LABEL = {
+  scout: "Scout", parent: "Parent",
+  patrol_co_leader: "Patrol Co-Leader", patrol_leader: "Patrol Leader",
+  cubs_leader: "Cubs Leader", scout_leader: "Scout Leader",
+  chapter_leader: "Chapter Leader", chapter_admin: "Chapter Admin",
+  national_admin: "National Admin",
+};
 
 const emptyForm = {
   full_name: "", full_name_hy: "", email: "", phone: "", dob: "", gender: "",
@@ -66,7 +82,48 @@ export default function Members() {
       if (editing) await api.put(`/members/${editing.member_id}`, payload);
       else await api.post("/members", payload);
       toast.success(editing ? "Member updated" : "Member added");
+
+      // Auto-sync user role prompt when a leadership position is set
+      if (editing && ["Patrol Co-Leader","Patrol Leader","Cubs Leader","Scout Leader","Chapter Leader","Chapter Admin"].includes(payload.position)) {
+        try {
+          const { data } = await api.post(`/members/${editing.member_id}/sync-user-role`, { apply: false });
+          if (data.linked && data.needs_change) {
+            const label = ROLE_LABEL[data.suggested_role] || data.suggested_role;
+            toast(`Upgrade ${payload.full_name}'s account role?`, {
+              description: `${ROLE_LABEL[data.current_role] || data.current_role} → ${label}`,
+              duration: 8000,
+              action: {
+                label: "Apply",
+                onClick: async () => {
+                  try {
+                    await api.post(`/members/${editing.member_id}/sync-user-role`, { apply: true });
+                    toast.success(`Role upgraded to ${label}`);
+                  } catch { toast.error("Failed to upgrade role"); }
+                },
+              },
+            });
+          }
+        } catch {}
+      }
       setOpen(false); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
+  };
+
+  const [parentDialog, setParentDialog] = useState(null); // member being invited
+  const [parentEmail, setParentEmail] = useState("");
+  const [parentName, setParentName] = useState("");
+  const inviteParent = async () => {
+    if (!parentDialog) return;
+    try {
+      const { data } = await api.post(`/members/${parentDialog.member_id}/invite-parent`, {
+        email: parentEmail, name: parentName,
+      });
+      if (data.temp_password) {
+        toast.success(`Parent invited`, { description: `Temp password: ${data.temp_password}`, duration: 15000 });
+      } else {
+        toast.success("Parent linked to existing account");
+      }
+      setParentDialog(null); setParentEmail(""); setParentName("");
     } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
   };
 
@@ -272,6 +329,9 @@ export default function Members() {
                   <Button size="sm" variant="ghost" onClick={() => openEdit(m)} data-testid={`edit-mbr-${m.member_id}`}>
                     <Pencil size={14}/>
                   </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setParentDialog(m); setParentEmail(""); setParentName(""); }} title="Invite parent" data-testid={`invite-parent-${m.member_id}`}>
+                    <UserPlus size={14}/>
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => archiveOne(m)} data-testid={`archive-mbr-${m.member_id}`}>
                     <Archive size={14} />
                   </Button>
@@ -281,6 +341,23 @@ export default function Members() {
           </TableBody>
         </Table>
       </Card>
+
+      <Dialog open={!!parentDialog} onOpenChange={(o) => !o && setParentDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Invite Parent</DialogTitle></DialogHeader>
+          {parentDialog && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Send a read-only account to a parent so they can follow <b>{parentDialog.full_name}</b>'s progress, attendance and upcoming activities.
+              </p>
+              <div><Label>Parent email</Label><Input type="email" value={parentEmail} onChange={e => setParentEmail(e.target.value)} data-testid="parent-email-input"/></div>
+              <div><Label>Parent name</Label><Input value={parentName} onChange={e => setParentName(e.target.value)} placeholder={parentDialog.guardian_name || ""} data-testid="parent-name-input"/></div>
+              <Button onClick={inviteParent} className="btn-pill w-full bg-[hsl(149,40%,30%)]" data-testid="parent-invite-submit">Send invite</Button>
+              <p className="text-[10px] text-muted-foreground">If this email already has an account, we'll simply link the child.</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

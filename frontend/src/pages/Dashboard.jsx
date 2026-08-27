@@ -16,6 +16,7 @@ export default function Dashboard() {
   const { lang } = useOutletContext();
   if (user?.role === "national_admin") return <NationalDashboard lang={lang} />;
   if (user?.role === "scout") return <ScoutDashboard lang={lang} user={user} />;
+  if (user?.role === "parent") return <ParentDashboard lang={lang} user={user} />;
   return <ChapterDashboard lang={lang} user={user} />;
 }
 
@@ -315,6 +316,95 @@ function ScoutDashboard({ lang, user }) {
             <Link to="/newsletters" className="inline-block mt-4 text-sm font-bold text-[hsl(12,65%,63%)]">Read all →</Link>
           </Card>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+function ParentDashboard({ lang, user }) {
+  const [children, setChildren] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get("/parent/children").then(r => { setChildren(r.data.children || []); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div>Loading…</div>;
+
+  return (
+    <div className="space-y-8">
+      <div className="clay-card p-6 lg:p-8" style={{ background: "linear-gradient(120deg, hsl(152 43% 15%), hsl(149 40% 25%))", color: "white", border: "none" }}>
+        <div className="uppercase-label" style={{ color: "hsl(32 87% 75%)" }}>Parent view</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Hello, {user?.name?.split(" ")[0]}</h1>
+        <p className="text-white/80 mt-2 text-sm">Read-only overview of your scout{children.length > 1 ? "s" : ""}. Any changes need to be made by a chapter leader.</p>
+      </div>
+
+      {!children.length && (
+        <Card className="clay-card p-8 text-center">
+          <div className="text-sm text-muted-foreground">Your account isn't linked to any scouts yet. Ask a chapter leader to link a child to your email.</div>
+        </Card>
+      )}
+
+      <div className="space-y-6">
+        {children.map(k => (
+          <Card key={k.member_id} className="clay-card p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-16 h-16 rounded-full bg-[hsl(12,65%,63%)]/20 text-[hsl(12,65%,63%)] flex items-center justify-center font-black text-2xl font-display">{k.full_name[0]}</div>
+              <div className="flex-1">
+                <div className="font-display font-black text-2xl">{k.full_name}</div>
+                <div className="text-muted-foreground text-sm">{k.section} · {k.patrol} Patrol · {k.position}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 mt-6">
+              <div className="stat-tile"><div className="text-3xl font-black font-display">{k.awarded_count}</div><div className="uppercase-label mt-1">Badges</div></div>
+              <div className="stat-tile"><div className="text-3xl font-black font-display">{k.attendance_percent}%</div><div className="uppercase-label mt-1">Attendance</div></div>
+              <div className="stat-tile"><div className="text-3xl font-black font-display">{k.attendance?.length || 0}</div><div className="uppercase-label mt-1">Events</div></div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4 mt-6">
+              <div>
+                <div className="uppercase-label mb-3">Badges in progress</div>
+                <div className="flex flex-wrap gap-4">
+                  {(k.badges || []).map(mb => {
+                    if (!mb.badge) return null;
+                    const total = mb.badge.requirements?.length || 1;
+                    const done = (mb.completed_requirements || []).filter(Boolean).length;
+                    const pct = Math.round(done / total * 100);
+                    return (
+                      <div key={mb.mb_id} className="text-center">
+                        <BadgePatch badge={mb.badge} awarded={mb.awarded} progress={pct}/>
+                        <div className="text-xs font-semibold mt-1 max-w-[80px]">{mb.badge.name}</div>
+                      </div>
+                    );
+                  })}
+                  {!k.badges?.length && <div className="text-sm text-muted-foreground">No badges yet.</div>}
+                </div>
+              </div>
+              <div>
+                <div className="uppercase-label mb-3">Next activity</div>
+                {k.next_activity ? (
+                  <Link to={`/programs/${k.next_activity.program_id}`} className="block p-4 rounded-xl bg-muted/50 border border-border hover:bg-muted">
+                    <div className="font-semibold">{k.next_activity.title}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{k.next_activity.date} · {k.next_activity.start_time} · {k.next_activity.location}</div>
+                  </Link>
+                ) : <div className="text-sm text-muted-foreground">No upcoming activities.</div>}
+
+                <div className="uppercase-label mt-6 mb-3">Recent attendance</div>
+                <div className="space-y-1">
+                  {(k.attendance || []).slice(0, 5).map(a => (
+                    <div key={a.attendance_id} className="flex items-center justify-between text-xs p-2 rounded bg-muted/40">
+                      <span>{a.date?.slice(0, 10)}</span>
+                      <Badge variant="outline" className="rounded-full text-[10px]">{a.status}</Badge>
+                    </div>
+                  ))}
+                  {!k.attendance?.length && <div className="text-sm text-muted-foreground">No attendance yet.</div>}
+                </div>
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
     </div>
   );
