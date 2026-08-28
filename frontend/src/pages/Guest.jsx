@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "@/lib/api";
+import { createPortal } from "react-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import { useAuth } from "@/context/AuthContext";
 import {
   Flame, Users, Building2, Award, Compass, CalendarDays, MapPin, Clock,
   Mail, ChevronRight, Mountain, Tent, Heart, ArrowRight, Sparkles, Megaphone,
-  Phone, Pencil, FileText, Download,
+  Phone, Pencil, FileText, Download, Camera, Facebook, Instagram, Twitter, Send, ChevronLeft,
 } from "lucide-react";
 
 export default function Guest() {
@@ -36,6 +37,7 @@ export default function Guest() {
   const [openProgram, setOpenProgram] = useState(null);
   const [openNewsletter, setOpenNewsletter] = useState(null);
   const [openGallery, setOpenGallery] = useState(null);
+  const [lightboxIdx, setLightboxIdx] = useState(null);
 
   useEffect(() => {
     api.get("/public/overview").then(r => setOverview(r.data)).catch(() => {});
@@ -191,10 +193,10 @@ export default function Guest() {
       </section>
 
       {/* Reorderable sections (order controlled from Administration → Homepage) */}
-      <div className="flex flex-col">
+      <div className="flex flex-col w-full items-stretch">
 
       {/* Chapters */}
-      <section id="chapters" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("chapters") }}>
+      <section id="chapters" className="w-full max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("chapters") }}>
         <div className="flex items-end justify-between mb-6">
           <div>
             <div className="uppercase-label">{t("Local hubs", "Մասնաճյուղեր")}</div>
@@ -253,7 +255,7 @@ export default function Guest() {
       </section>
 
       {/* Upcoming events */}
-      <section id="events" className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20" style={{ order: orderIdx("events") }}>
+      <section id="events" className="w-full max-w-[1400px] mx-auto px-4 lg:px-8 py-20" style={{ order: orderIdx("events") }}>
         <div className="flex items-end justify-between mb-6">
           <div>
             <div className="uppercase-label">{t("On the horizon", "Առաջիկա")}</div>
@@ -300,7 +302,7 @@ export default function Guest() {
       </section>
 
       {/* Newsletters */}
-      <section id="newsletters" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("newsletters") }}>
+      <section id="newsletters" className="w-full max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("newsletters") }}>
         <div className="mb-6">
           <div className="uppercase-label">{t("From HQ", "Կենտրոնից")}</div>
           <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
@@ -351,7 +353,7 @@ export default function Guest() {
       </section>
 
       {/* Leaders */}
-      <section id="leaders" className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20" style={{ order: orderIdx("leaders") }}>
+      <section id="leaders" className="w-full max-w-[1400px] mx-auto px-4 lg:px-8 py-20" style={{ order: orderIdx("leaders") }}>
         <div className="mb-6">
           <div className="uppercase-label">{t("Meet the team", "Ղեկավարներ")}</div>
           <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
@@ -505,24 +507,35 @@ export default function Guest() {
 
       {/* Galleries */}
       {galleries.length > 0 && (
-        <section id="galleries" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("galleries") }}>
+        <section id="galleries" className="w-full max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("galleries") }}>
           <div className="mb-6">
             <div className="uppercase-label">{t("Snapshots", "Պահեր")}</div>
             <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
               {t("From the field", "Դաշտից")}
             </h2>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {galleries.slice(0, 6).map(g => (
-              <Card key={g.gallery_id} onClick={() => setOpenGallery(g)} className="clay-card overflow-hidden hover-lift cursor-pointer group" data-testid={`guest-gallery-${g.gallery_id}`}>
-                <div className="h-52 relative bg-muted overflow-hidden">
+              <Card key={g.gallery_id} onClick={() => setOpenGallery(g)} className="clay-card overflow-hidden hover-lift cursor-pointer group w-full" data-testid={`guest-gallery-${g.gallery_id}`}>
+                <div className="relative w-full aspect-square bg-[hsl(149,40%,30%)] overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
                   {g.cover
-                    ? <img src={g.cover} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
-                    : (g.images?.[0]?.data ? <img src={g.images[0].data} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = "none"; }}/> : null)}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"/>
-                  <div className="absolute bottom-3 left-4 right-4 text-white">
-                    <div className="font-display font-bold">{g.title}</div>
-                    <div className="text-xs opacity-80">{g.images?.length || 0} {t("photos", "լուսանկար")}</div>
+                    ? <img src={g.cover} alt={g.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
+                    : (g.images?.[0]?.data
+                        ? <img src={g.images[0].data} alt={g.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
+                        : (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-white/80 gap-3" style={{ background: "linear-gradient(135deg, hsl(152 43% 15%), hsl(149 40% 30%))" }}>
+                            <Camera size={64} strokeWidth={1.3}/>
+                            <div className="text-[10px] uppercase tracking-[0.3em] font-bold">{t("Photos coming soon", "Լուսանկարները շուտով")}</div>
+                          </div>
+                        )
+                      )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"/>
+                  <div className="absolute top-4 right-4 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/95 backdrop-blur text-[10px] font-bold uppercase tracking-widest text-[hsl(149,40%,30%)]">
+                    {g.images?.length || 0} {t("photos", "լուսանկար")}
+                  </div>
+                  <div className="absolute bottom-5 left-6 right-6 text-white">
+                    <div className="font-display font-black text-2xl leading-tight">{g.title}</div>
+                    {g.description && <div className="text-sm opacity-85 mt-1 line-clamp-2">{g.description}</div>}
                   </div>
                 </div>
               </Card>
@@ -533,7 +546,7 @@ export default function Guest() {
 
       {/* Resources */}
       {resources.length > 0 && (
-        <section id="resources" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("resources") }}>
+        <section id="resources" className="w-full max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("resources") }}>
           <div className="mb-6">
             <div className="uppercase-label">{t("Downloads", "Ներբեռնումներ")}</div>
             <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
@@ -717,9 +730,16 @@ export default function Guest() {
               {openGallery.description && <p className="text-sm text-muted-foreground -mt-2">{openGallery.description}</p>}
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
                 {(openGallery.images || []).map((img, i) => (
-                  <div key={i} className="aspect-square rounded-xl overflow-hidden bg-muted">
-                    <img src={img.data} alt={img.caption || `photo ${i+1}`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
-                  </div>
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setLightboxIdx(i)}
+                    className="aspect-square rounded-xl overflow-hidden bg-muted relative group focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(12,65%,63%)]"
+                    data-testid={`gallery-thumb-${i}`}
+                  >
+                    <img src={img.data} alt={img.caption || `photo ${i+1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors"/>
+                  </button>
                 ))}
                 {!openGallery.images?.length && <div className="col-span-full text-sm text-muted-foreground text-center py-6">{t("No photos yet.", "Դեռ լուսանկարներ չկան։")}</div>}
               </div>
@@ -727,6 +747,18 @@ export default function Guest() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Lightbox for gallery images */}
+      {openGallery && lightboxIdx !== null && (
+        <Lightbox
+          images={openGallery.images || []}
+          index={lightboxIdx}
+          onIndex={setLightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+          title={openGallery.title}
+          t={t}
+        />
+      )}
 
       {/* Footer */}
       <footer className="border-t border-border bg-[hsl(155,60%,8%)] text-white">
@@ -762,6 +794,14 @@ export default function Guest() {
               <div className="flex items-center gap-2">
                 <Phone size={14}/> <a href={`tel:${(footer.hq_phone || "+37410000000").replace(/\s/g, "")}`} className="hover:text-[hsl(12,65%,63%)]">{footer.hq_phone || "+374 10 000 000"}</a>
               </div>
+              {(footer.facebook || footer.instagram || footer.x || footer.telegram) && (
+                <div className="flex items-center gap-2 pt-2" data-testid="footer-socials">
+                  {footer.facebook && <a href={footer.facebook} target="_blank" rel="noreferrer" aria-label="Facebook" className="w-8 h-8 rounded-full bg-white/10 hover:bg-[hsl(12,65%,63%)] flex items-center justify-center transition-colors"><Facebook size={14}/></a>}
+                  {footer.instagram && <a href={footer.instagram} target="_blank" rel="noreferrer" aria-label="Instagram" className="w-8 h-8 rounded-full bg-white/10 hover:bg-[hsl(12,65%,63%)] flex items-center justify-center transition-colors"><Instagram size={14}/></a>}
+                  {footer.x && <a href={footer.x} target="_blank" rel="noreferrer" aria-label="X (Twitter)" className="w-8 h-8 rounded-full bg-white/10 hover:bg-[hsl(12,65%,63%)] flex items-center justify-center transition-colors"><Twitter size={14}/></a>}
+                  {footer.telegram && <a href={footer.telegram} target="_blank" rel="noreferrer" aria-label="Telegram" className="w-8 h-8 rounded-full bg-white/10 hover:bg-[hsl(12,65%,63%)] flex items-center justify-center transition-colors"><Send size={14}/></a>}
+                </div>
+              )}
             </div>
           </div>
 
@@ -810,5 +850,123 @@ export default function Guest() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function Lightbox({ images, index, onIndex, onClose, title, t }) {
+  const total = images.length;
+  const [zoom, setZoom] = React.useState(false);
+
+  const go = React.useCallback((delta) => {
+    if (!total) return;
+    const next = (index + delta + total) % total;
+    onIndex(next);
+    setZoom(false);
+  }, [index, total, onIndex]);
+
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); go(1); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); }
+    };
+    window.addEventListener("keydown", handler, true);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", handler, true);
+      document.body.style.overflow = "";
+    };
+  }, [go, onClose]);
+
+  if (!total) return null;
+  const img = images[index];
+
+  const download = () => {
+    if (!img?.data) return;
+    const a = document.createElement("a");
+    a.href = img.data;
+    const safe = (img.caption || `${title || "photo"}-${index + 1}`).replace(/[^\w.-]+/g, "_");
+    const ext = (img.data.match(/data:image\/(\w+)/) || [null, "jpg"])[1].replace("jpeg", "jpg");
+    a.download = `${safe}.${ext}`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] bg-black/95 flex flex-col"
+      style={{ pointerEvents: "auto" }}
+      data-testid="lightbox"
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="flex items-center justify-between px-4 py-3 text-white/90 flex-shrink-0">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-widest opacity-70 truncate">{title}</div>
+          <div className="text-sm font-semibold">{index + 1} / {total}{img?.caption ? ` · ${img.caption}` : ""}</div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={download}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm font-semibold"
+            data-testid="lightbox-download"
+          >
+            <Download size={14}/> {t("Download", "Ներբեռնել")}
+          </button>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
+            aria-label="Close"
+            data-testid="lightbox-close"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <div
+        className="flex-1 relative overflow-hidden flex items-center justify-center px-4 pb-4"
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
+        <button
+          onClick={() => go(-1)}
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center z-10"
+          aria-label="Previous"
+          data-testid="lightbox-prev"
+        >
+          <ChevronLeft size={22}/>
+        </button>
+        <img
+          src={img?.data}
+          alt={img?.caption || `photo ${index + 1}`}
+          onClick={() => setZoom(z => !z)}
+          className={`max-h-full max-w-full object-contain select-none cursor-${zoom ? "zoom-out" : "zoom-in"} transition-transform duration-200`}
+          style={{ transform: zoom ? "scale(2)" : "scale(1)" }}
+          data-testid="lightbox-image"
+        />
+        <button
+          onClick={() => go(1)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center z-10"
+          aria-label="Next"
+          data-testid="lightbox-next"
+        >
+          <ChevronRight size={22}/>
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 px-4 pb-4 overflow-x-auto flex-shrink-0">
+        {images.map((im, i) => (
+          <button
+            key={i}
+            onClick={() => { onIndex(i); setZoom(false); }}
+            className={`w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${i === index ? "border-[hsl(12,65%,63%)] scale-105" : "border-transparent opacity-60 hover:opacity-100"}`}
+            data-testid={`lightbox-thumb-${i}`}
+          >
+            <img src={im.data} alt="" className="w-full h-full object-cover"/>
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body
   );
 }

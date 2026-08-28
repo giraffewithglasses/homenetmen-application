@@ -460,6 +460,28 @@ function HomepageSettings() {
             </div>
             <p className="text-xs text-muted-foreground mt-1">Yervand Kochar 17/6, Yerevan ≈ 40.1893, 44.5175</p>
           </div>
+
+          <div className="border-t border-border pt-4 mt-2">
+            <div className="font-semibold text-sm mb-2 flex items-center gap-2"><Globe size={14} className="text-[hsl(12,65%,55%)]"/> Social links <span className="text-xs text-muted-foreground font-normal">(leave empty to hide)</span></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Facebook URL</Label>
+                <Input value={settings.footer.facebook || ""} onChange={e => updateFooter("facebook", e.target.value)} placeholder="https://facebook.com/homenetmenhask" data-testid="footer-facebook"/>
+              </div>
+              <div>
+                <Label className="text-xs">Instagram URL</Label>
+                <Input value={settings.footer.instagram || ""} onChange={e => updateFooter("instagram", e.target.value)} placeholder="https://instagram.com/homenetmenhask" data-testid="footer-instagram"/>
+              </div>
+              <div>
+                <Label className="text-xs">X / Twitter URL <span className="text-muted-foreground">(optional)</span></Label>
+                <Input value={settings.footer.x || ""} onChange={e => updateFooter("x", e.target.value)} placeholder="https://x.com/homenetmenhask" data-testid="footer-x"/>
+              </div>
+              <div>
+                <Label className="text-xs">Telegram URL <span className="text-muted-foreground">(optional)</span></Label>
+                <Input value={settings.footer.telegram || ""} onChange={e => updateFooter("telegram", e.target.value)} placeholder="https://t.me/homenetmenhask" data-testid="footer-telegram"/>
+              </div>
+            </div>
+          </div>
         </div>
       </Card>
 

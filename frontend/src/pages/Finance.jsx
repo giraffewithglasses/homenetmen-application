@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Wallet, TrendingUp, TrendingDown, Plus, Building2, Trash2, DollarSign, Calendar } from "lucide-react";
+import { Wallet, TrendingUp, TrendingDown, Plus, Building2, Trash2, DollarSign, Calendar, Download } from "lucide-react";
 
 const fmt = (v) => `֏${Number(v || 0).toLocaleString()}`;
 
@@ -60,6 +60,23 @@ export default function Finance() {
     catch { toast.error("Failed"); }
   };
 
+  const exportExcel = async () => {
+    if (!txns.length) return toast("Nothing to export");
+    const XLSX = await import("xlsx");
+    const rows = txns.map(t => ({
+      Date: t.date, Type: t.kind, Category: t.category,
+      "Amount (AMD)": t.amount, Description: t.description || "",
+      Chapter: t.chapter_id || "National",
+      "Recorded by": t.created_by, "Recorded at": t.created_at,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = Object.keys(rows[0]).map(k => ({ wch: Math.max(14, k.length + 2) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+    const scopeLabel = summary?.chapter_name || (isAll ? "All" : "Ledger");
+    XLSX.writeFile(wb, `finance-${scopeLabel.replace(/\s+/g, "_")}-${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
   const availableCategories = useMemo(() => {
     const inc = new Set(cats.income_categories || []);
     return (cats.categories || []).filter(c => form.kind === "income" ? inc.has(c) : !inc.has(c));
@@ -94,7 +111,11 @@ export default function Finance() {
             </Select>
           )}
           {canEdit && !isAll && (
-            <Dialog open={open} onOpenChange={setOpen}>
+            <>
+              <Button variant="outline" className="btn-pill" onClick={exportExcel} disabled={!txns.length} data-testid="fin-export-excel">
+                <Download size={16} className="mr-2"/> Excel
+              </Button>
+              <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" data-testid="fin-add-btn">
                   <Plus size={16} className="mr-2"/> Record transaction
@@ -151,6 +172,7 @@ export default function Finance() {
                 </div>
               </DialogContent>
             </Dialog>
+            </>
           )}
         </div>
       </div>

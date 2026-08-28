@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only retest on https://badge-track-2.preview.emergentagent.com. (A) LIGHTBOX FIX VERIFIED — all previously failing mouse interactions now work: body has pointer-events:none but the portaled lightbox root computes pointerEvents='auto'; real-user click on [data-testid=lightbox-next] advances counter 1/2 -> 2/2, prev returns to 1/2, thumbnail strip (lightbox-thumb-1) jumps to 2/2, image click toggles transform scale(1) -> scale(2) without closing, download click fires a real browser download (filename 'Summer_Camp_2026-2.jpg', href data:image/jpeg;base64,...), ArrowRight/ArrowLeft navigate, Escape closes ONLY the lightbox (Snapshots dialog stays open), lightbox-close button also closes only the lightbox. No click dismisses the parent Snapshots dialog. (B) EXCEL EXPORT VERIFIED — /members [data-testid=export-excel] downloads members-2026-08-28.xlsx (18209 bytes, valid PK/zip xlsx header); /finance scoped to Kentron Chapter shows [data-testid=fin-export-excel] and downloads finance-Kentron_Chapter-2026-08-28.xlsx (valid xlsx); button is correctly disabled for a scope with 0 transactions (Arabkir Chapter) and hidden in the 'All' scope. Grep of /app/frontend/src found ZERO remaining CSV export code/buttons; 0 'CSV' buttons rendered on Members or Finance. One minor residual defect: backdrop click does not close the lightbox.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Guest.jsx Lightbox backdrop", "issue": "Spec item 'clicking the black backdrop closes only the lightbox' does NOT work. The root uses onClick={e => e.target === e.currentTarget && onClose()}, but the root's three children (header, flex-1 image area, thumb strip) tile the entire viewport, so document.elementFromPoint at every black region returns a child div (verified: 'flex-1 relative overflow-hidden...' and the thumb-strip div) — the root never becomes the event target. A real click in the black area beside the image left both lightbox and dialog open. Fix: attach the close handler to the image-area/backdrop child (checking e.target === e.currentTarget there) or add an absolutely positioned backdrop layer behind the content.", "selector": "[data-testid='lightbox']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Make lightbox backdrop click close the lightbox (handler on the inner image-area container, not the root, since children cover 100% of the root)."
+  ],
+  "critical_code_review_comments": [
+    "Guest.jsx is ~970 lines; the Lightbox and gallery section should be extracted into their own modules.",
+    "Radix warning in console on the guest page: 'Missing Description or aria-describedby={undefined} for DialogContent' — add DialogDescription (a11y).",
+    "Finance.jsx exportExcel is nearly identical to Members.jsx exportExcel; extract a shared exportToXlsx(rows, sheetName, filename) helper to avoid DRY drift."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only scope)", "frontend": "92% (11/12 scoped checks passed; only backdrop-click-to-close fails)"},
+  "seed_data_creation": "Created finance txn fin_8d751fb1bfb3 (income/Donations/50000/chp_ararat) via POST /api/finance/transactions for the Finance Excel test and DELETED it afterwards (verified chapter ledger back to [] ). DB left in original state.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "hovsepmarachlian@gmail.com / admin123 (national_admin) — login works, redirects to /dashboard",
+  "context_for_next_testing_agent": "All 4 previously reported lightbox defects (pointer-events:none inheritance, DismissableLayer dismissing parent dialog, Escape cascade, scale(1.5) vs scale(2)) are FIXED and verified with real user clicks. Guest gallery card testid pattern is [data-testid='guest-gallery-gal_<id>'] (not 'guest-gallery-card'). Excel exports verified as real xlsx (PK header) on Members and Finance; no CSV code remains in /app/frontend/src. Only open item: lightbox backdrop click does not close (children tile the root).",
+  "rca_of_the_issue": "Backdrop-close relies on target===currentTarget on the lightbox root, but the root is a flex column whose three children fill the whole viewport, so the root is never the hit-test target; the guard therefore never fires."
+}

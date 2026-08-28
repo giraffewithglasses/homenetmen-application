@@ -165,12 +165,17 @@ export default function Members() {
     setSelected(n);
   };
 
-  const exportCSV = () => {
-    const headers = ["full_name", "email", "phone", "section", "patrol", "chapter_id", "status", "position"];
-    const rows = [headers.join(","), ...members.map(m => headers.map(h => JSON.stringify(m[h] ?? "")).join(","))];
-    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "members.csv"; a.click();
+  const exportExcel = async () => {
+    const XLSX = await import("xlsx");
+    const headers = ["full_name", "full_name_hy", "email", "phone", "gender", "section", "patrol", "chapter_id", "status", "position", "membership_start"];
+    const rows = members.map(m => Object.fromEntries(headers.map(h => [h, m[h] ?? ""])));
+    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+    // widen columns
+    ws["!cols"] = headers.map(h => ({ wch: Math.max(14, h.length + 2) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Members");
+    const date = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `members-${date}.xlsx`);
   };
 
   return (
@@ -195,7 +200,7 @@ export default function Members() {
               <Archive size={16} className="mr-2"/> Archive selected ({selected.size})
             </Button>
           )}
-          <Button variant="outline" className="btn-pill" onClick={exportCSV} data-testid="export-csv"><Download size={16} className="mr-2"/> CSV</Button>
+          <Button variant="outline" className="btn-pill" onClick={exportExcel} data-testid="export-excel"><Download size={16} className="mr-2"/> Excel</Button>
           <Button className="btn-pill bg-[hsl(12,65%,63%)]" onClick={openNew} data-testid="new-member-btn"><Plus size={16} className="mr-2"/>New Member</Button>
         </div>
       </div>

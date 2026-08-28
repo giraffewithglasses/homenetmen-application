@@ -59,6 +59,38 @@ export default function Galleries() {
               <div className="space-y-3">
                 <div><Label>Title</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} data-testid="gal-title"/></div>
                 <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}/></div>
+
+                <div>
+                  <Label>Cover photo <span className="text-muted-foreground text-xs">(shown on homepage before scouts click in)</span></Label>
+                  <div className="flex items-center gap-3 mt-1">
+                    <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted flex-shrink-0">
+                      {form.cover
+                        ? <img src={form.cover} alt="" className="w-full h-full object-cover"/>
+                        : <ImageIcon size={22} className="text-muted-foreground/60"/>}
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          if (f.size > 2 * 1024 * 1024) return toast.error(`${f.name} > 2MB`);
+                          const r = new FileReader();
+                          r.onload = () => setForm(prev => ({ ...prev, cover: r.result }));
+                          r.readAsDataURL(f);
+                        }}
+                        className="text-sm"
+                        data-testid="gal-cover-upload"
+                      />
+                      {form.cover && (
+                        <button type="button" onClick={() => setForm({ ...form, cover: "" })} className="text-xs text-muted-foreground hover:text-[hsl(0,65%,55%)]">Remove cover</button>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">Leave empty and we'll use the first photo automatically.</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <Label>Photos</Label>
                   <Input ref={fileRef} type="file" accept="image/*" multiple onChange={e => addFiles(e.target.files)} data-testid="gal-files"/>
