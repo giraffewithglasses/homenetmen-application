@@ -9,19 +9,33 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import BadgePatch from "@/components/BadgePatch";
-import { Trophy } from "lucide-react";
+import { Trophy, Clock } from "lucide-react";
 
 export default function MyProgress() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [allBadges, setAllBadges] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
     const [s, b] = await Promise.all([api.get("/stats/scout"), api.get("/badges")]);
     setStats(s.data); setAllBadges(b.data);
   };
   useEffect(() => { load(); }, []);
+
+  const requestBadge = async (b) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api.post("/badges/request", { badge_id: b.badge_id });
+      toast.success(`Request sent — your leader will review '${b.name}'`);
+      setSelected(null);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Couldn't send request");
+    } finally { setBusy(false); }
+  };
 
   if (!stats) return <div>Loading…</div>;
   if (!stats.linked) return (
@@ -35,7 +49,8 @@ export default function MyProgress() {
   const memberBadges = member?.badges || [];
   const getMB = (bid) => memberBadges.find(mb => mb.badge_id === bid);
   const awarded = allBadges.filter(b => getMB(b.badge_id)?.awarded);
-  const inProgress = allBadges.filter(b => { const mb = getMB(b.badge_id); return mb && !mb.awarded; });
+  const requested = allBadges.filter(b => getMB(b.badge_id)?.status === "requested");
+  const inProgress = allBadges.filter(b => { const mb = getMB(b.badge_id); return mb && !mb.awarded && mb.status !== "requested"; });
   const available = allBadges.filter(b => !getMB(b.badge_id));
 
   return (
@@ -59,6 +74,7 @@ export default function MyProgress() {
       </Card>
 
       <Section title="Awarded" badges={awarded} getMB={getMB} onSelect={setSelected} awarded/>
+      <Section title="Awaiting approval" badges={requested} getMB={getMB} onSelect={setSelected} pending/>
       <Section title="In progress" badges={inProgress} getMB={getMB} onSelect={setSelected}/>
       <Section title="Available" badges={available} getMB={getMB} onSelect={setSelected}/>
 
@@ -77,6 +93,27 @@ export default function MyProgress() {
               </div>
             </div>
             <p className="text-sm text-muted-foreground">{selected.description}</p>
+            {(() => {
+              const mb = getMB(selected.badge_id);
+              if (!mb) {
+                return (
+                  <Button
+                    className="btn-pill w-full bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]"
+                    disabled={busy}
+                    onClick={() => requestBadge(selected)}
+                    data-testid={`bdg-request-${selected.badge_id}`}
+                  >Request to start this badge</Button>
+                );
+              }
+              if (mb.status === "requested") {
+                return (
+                  <div className="rounded-xl bg-[hsl(32,87%,67%)]/15 border border-[hsl(32,87%,67%)]/40 p-3 text-sm text-[hsl(32,87%,45%)] flex items-center gap-2">
+                    <Clock size={14}/> Waiting for leader approval
+                  </div>
+                );
+              }
+              return null;
+            })()}
             <div className="uppercase-label">Requirements</div>
             <ul className="space-y-2">
               {selected.requirements.map((r, i) => {
@@ -99,12 +136,13 @@ export default function MyProgress() {
   );
 }
 
-function Section({ title, badges, getMB, onSelect, awarded }) {
+function Section({ title, badges, getMB, onSelect, awarded, pending }) {
   if (!badges.length) return null;
   return (
     <Card className="clay-card p-6">
       <div className="flex items-center gap-2 mb-4">
         {awarded && <Trophy size={18} className="text-[hsl(32,87%,67%)]"/>}
+        {pending && <Clock size={18} className="text-[hsl(32,87%,55%)]"/>}
         <h3 className="font-display font-bold text-xl">{title} <span className="text-muted-foreground font-normal">({badges.length})</span></h3>
       </div>
       <div className="flex flex-wrap gap-6">

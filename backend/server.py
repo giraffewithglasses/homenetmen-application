@@ -851,6 +851,155 @@ async def unarchive_badge(badge_id: str, user: dict = Depends(require_roles("nat
 async def member_badges(member_id: str, user: dict = Depends(get_current_user)):
     return await db.member_badges.find({"member_id": member_id}, {"_id": 0}).to_list(500)
 
+class BadgeAssignIn(BaseModel):
+    member_id: str
+    badge_id: str
+
+@api.post("/badges/assign")
+async def assign_badge(payload: BadgeAssignIn, user: dict = Depends(get_current_user)):
+    """Leader assigns a badge to a scout to start working on."""
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Only leaders can assign badges")
+    badge = await db.badges.find_one({"badge_id": payload.badge_id, "archived": {"$ne": True}})
+    if not badge: raise HTTPException(404, "Badge not found")
+    m = await db.members.find_one({"member_id": payload.member_id})
+    if not m: raise HTTPException(404, "Member not found")
+    _member_chapter_guard(user, m["chapter_id"])
+    total = len(badge.get("requirements", []))
+    existing = await db.member_badges.find_one({"member_id": payload.member_id, "badge_id": payload.badge_id})
+    if existing:
+        if existing.get("awarded"):
+            raise HTTPException(400, "Scout already earned this badge")
+        # If it was requested, approve it; otherwise it's already in progress
+        await db.member_badges.update_one(
+            {"mb_id": existing["mb_id"]},
+            {"$set": {"status": "in_progress", "assigned_by": user["email"], "assigned_at": now_iso()}},
+        )
+    else:
+        await db.member_badges.insert_one({
+            "mb_id": new_id("mb"),
+            "member_id": payload.member_id,
+            "badge_id": payload.badge_id,
+            "completed_requirements": [False] * total,
+            "awarded": False,
+            "awarded_at": "",
+            "awarded_by": "",
+            "status": "in_progress",
+            "assigned_by": user["email"],
+            "assigned_at": now_iso(),
+            "created_at": now_iso(),
+        })
+    linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
+    if linked:
+        await notify([linked["user_id"]], "New badge to work on", f"You've been assigned '{badge['name']}' — start earning it!", "info", "/my-progress")
+    await audit(user, "assign", "badge", payload.badge_id, {"member": payload.member_id})
+    return await db.member_badges.find_one({"member_id": payload.member_id, "badge_id": payload.badge_id}, {"_id": 0})
+
+class BadgeRequestIn(BaseModel):
+    badge_id: str
+
+@api.post("/badges/request")
+async def request_badge(payload: BadgeRequestIn, user: dict = Depends(get_current_user)):
+    """Scout requests permission to start a badge."""
+    m = await db.members.find_one({"email": user["email"]})
+    if not m:
+        raise HTTPException(400, "Your account isn't linked to a scout profile yet")
+    badge = await db.badges.find_one({"badge_id": payload.badge_id, "archived": {"$ne": True}})
+    if not badge: raise HTTPException(404, "Badge not found")
+    total = len(badge.get("requirements", []))
+    existing = await db.member_badges.find_one({"member_id": m["member_id"], "badge_id": payload.badge_id})
+    if existing:
+        st = existing.get("status") or ("awarded" if existing.get("awarded") else "in_progress")
+        raise HTTPException(400, f"Already {st.replace('_', ' ')}")
+    await db.member_badges.insert_one({
+        "mb_id": new_id("mb"),
+        "member_id": m["member_id"],
+        "badge_id": payload.badge_id,
+        "completed_requirements": [False] * total,
+        "awarded": False,
+        "awarded_at": "",
+        "awarded_by": "",
+        "status": "requested",
+        "requested_at": now_iso(),
+        "created_at": now_iso(),
+    })
+    # Notify chapter leaders
+    leaders = await db.users.find(
+        {"chapter_id": m.get("chapter_id"), "role": {"$in": ["chapter_admin", "chapter_leader"]}, "status": "active"},
+        {"user_id": 1},
+    ).to_list(20)
+    if leaders:
+        await notify(
+            [l["user_id"] for l in leaders],
+            "Badge request",
+            f"{m.get('full_name')} wants to start '{badge['name']}'",
+            "info", "/badges",
+        )
+    await audit(user, "request", "badge", payload.badge_id, {"member": m["member_id"]})
+    return {"ok": True, "status": "requested"}
+
+@api.get("/badges/requests")
+async def list_badge_requests(user: dict = Depends(get_current_user)):
+    """Leaders see pending badge requests scoped to their chapter (national admin sees all)."""
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Not allowed")
+    q = {"status": "requested"}
+    reqs = await db.member_badges.find(q, {"_id": 0}).to_list(500)
+    if not reqs: return []
+    member_ids = [r["member_id"] for r in reqs]
+    members = {m["member_id"]: m for m in await db.members.find({"member_id": {"$in": member_ids}}, {"_id": 0}).to_list(1000)}
+    badge_ids = list({r["badge_id"] for r in reqs})
+    badges = {b["badge_id"]: b for b in await db.badges.find({"badge_id": {"$in": badge_ids}}, {"_id": 0}).to_list(500)}
+    out = []
+    for r in reqs:
+        m = members.get(r["member_id"])
+        if not m: continue
+        if user["role"] != "national_admin" and m.get("chapter_id") != user.get("chapter_id"):
+            continue
+        r["member"] = {"full_name": m.get("full_name"), "section": m.get("section"), "chapter_id": m.get("chapter_id")}
+        r["badge"] = badges.get(r["badge_id"], {})
+        out.append(r)
+    return out
+
+@api.post("/badges/requests/{mb_id}/approve")
+async def approve_badge_request(mb_id: str, user: dict = Depends(get_current_user)):
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Not allowed")
+    mb = await db.member_badges.find_one({"mb_id": mb_id})
+    if not mb or mb.get("status") != "requested":
+        raise HTTPException(404, "Request not found")
+    m = await db.members.find_one({"member_id": mb["member_id"]})
+    if not m: raise HTTPException(404, "Member not found")
+    _member_chapter_guard(user, m["chapter_id"])
+    await db.member_badges.update_one(
+        {"mb_id": mb_id},
+        {"$set": {"status": "in_progress", "assigned_by": user["email"], "assigned_at": now_iso()}},
+    )
+    linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
+    if linked:
+        badge = await db.badges.find_one({"badge_id": mb["badge_id"]}, {"name": 1})
+        await notify([linked["user_id"]], "Badge request approved", f"You can start working on '{badge.get('name') if badge else 'your badge'}'", "success", "/my-progress")
+    await audit(user, "approve", "badge_request", mb["badge_id"], {"member": mb["member_id"]})
+    return {"ok": True}
+
+@api.post("/badges/requests/{mb_id}/deny")
+async def deny_badge_request(mb_id: str, user: dict = Depends(get_current_user)):
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Not allowed")
+    mb = await db.member_badges.find_one({"mb_id": mb_id})
+    if not mb or mb.get("status") != "requested":
+        raise HTTPException(404, "Request not found")
+    m = await db.members.find_one({"member_id": mb["member_id"]})
+    if not m: raise HTTPException(404, "Member not found")
+    _member_chapter_guard(user, m["chapter_id"])
+    await db.member_badges.delete_one({"mb_id": mb_id})
+    linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
+    if linked:
+        badge = await db.badges.find_one({"badge_id": mb["badge_id"]}, {"name": 1})
+        await notify([linked["user_id"]], "Badge request declined", f"Your request for '{badge.get('name') if badge else 'the badge'}' wasn't approved this time. Talk to your leader.", "warning", "/my-progress")
+    await audit(user, "deny", "badge_request", mb["badge_id"], {"member": mb["member_id"]})
+    return {"ok": True}
+
 @api.post("/badges/progress")
 async def update_progress(payload: RequirementUpdate, user: dict = Depends(get_current_user)):
     if not is_leader(user["role"]):
@@ -1661,10 +1810,15 @@ async def ensure_seed_users_present():
     admin_password = os.environ["ADMIN_PASSWORD"]
     # If ADMIN_EMAIL was changed, migrate the existing admin record to the new email.
     old_admin = await db.users.find_one({"user_id": "usr_admin"})
-    if old_admin and old_admin.get("email") != admin_email:
-        # remove any user squatting on the target email (won't touch usr_admin itself)
-        await db.users.delete_many({"email": admin_email, "user_id": {"$ne": "usr_admin"}})
-        await db.users.update_one({"user_id": "usr_admin"}, {"$set": {"email": admin_email, "password_hash": hash_password(admin_password)}})
+    if old_admin:
+        # keep the owner account pinned to national_admin — never let a login/promotion demote it.
+        fixup = {"role": "national_admin", "chapter_id": None, "status": "active"}
+        if old_admin.get("email") != admin_email:
+            # remove any user squatting on the target email (won't touch usr_admin itself)
+            await db.users.delete_many({"email": admin_email, "user_id": {"$ne": "usr_admin"}})
+            fixup["email"] = admin_email
+            fixup["password_hash"] = hash_password(admin_password)
+        await db.users.update_one({"user_id": "usr_admin"}, {"$set": fixup})
     users_seed = [
         {"user_id": "usr_admin", "email": admin_email, "name": "National Administrator",
          "password_hash": hash_password(admin_password), "role": "national_admin", "chapter_id": None},

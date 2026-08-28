@@ -10,10 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, Archive, ArchiveRestore } from "lucide-react";
+import { Plus, Archive, ArchiveRestore, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import BadgePatch from "@/components/BadgePatch";
 
+const LEADER_ROLES = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader"];
 const SECTIONS = ["Cubs", "Scouts", "Senior Scouts", "Rovers"];
 const CATEGORIES = ["Scouting Skills", "Camping", "Hiking", "First Aid", "Leadership", "Nature", "Community Service", "Communication", "Navigation", "Sports", "Creativity", "Citizenship"];
 
@@ -29,9 +30,24 @@ export default function Badges() {
   });
   const [reqInput, setReqInput] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [requests, setRequests] = useState([]);
+
+  const isLeader = LEADER_ROLES.includes(user?.role);
 
   const load = () => api.get(`/badges?include_archived=${showArchived}`).then(r => setBadges(r.data));
-  useEffect(() => { load(); }, [showArchived]);
+  const loadRequests = () => {
+    if (!isLeader) return;
+    api.get("/badges/requests").then(r => setRequests(r.data)).catch(() => setRequests([]));
+  };
+  useEffect(() => { load(); loadRequests(); /* eslint-disable-next-line */ }, [showArchived, user?.role]);
+
+  const decideRequest = async (mb_id, mode) => {
+    try {
+      await api.post(`/badges/requests/${mb_id}/${mode}`);
+      toast.success(mode === "approve" ? "Request approved — scout can start" : "Request declined");
+      loadRequests();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
+  };
 
   const save = async () => {
     try { await api.post("/badges", form); toast.success("Badge created"); setOpen(false); load(); }
@@ -151,6 +167,34 @@ export default function Badges() {
           )}
         </div>
       </div>
+
+      {isLeader && requests.length > 0 && (
+        <Card className="clay-card p-6 border-l-4 border-l-[hsl(32,87%,55%)]" data-testid="badge-requests-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock size={18} className="text-[hsl(32,87%,55%)]"/>
+            <h3 className="font-display font-bold text-xl">Pending badge requests <span className="text-muted-foreground font-normal">({requests.length})</span></h3>
+          </div>
+          <div className="space-y-3">
+            {requests.map(r => (
+              <div key={r.mb_id} className="flex items-center gap-4 p-3 rounded-xl border border-border" data-testid={`badge-request-${r.mb_id}`}>
+                <BadgePatch badge={r.badge} awarded size={48}/>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">{r.member?.full_name || "Unknown scout"}</div>
+                  <div className="text-xs text-muted-foreground truncate">wants to start <b>{r.badge?.name}</b> · {r.member?.section}</div>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Button size="sm" onClick={() => decideRequest(r.mb_id, "approve")} className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid={`badge-request-approve-${r.mb_id}`}>
+                    <CheckCircle2 size={12} className="mr-1"/> Approve
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => decideRequest(r.mb_id, "deny")} className="btn-pill text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" data-testid={`badge-request-deny-${r.mb_id}`}>
+                    <XCircle size={12} className="mr-1"/> Deny
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(b => (

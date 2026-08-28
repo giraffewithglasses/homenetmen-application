@@ -4,24 +4,54 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Mail, Phone, Calendar, User, Shield, IdCard } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, User, Shield, IdCard, Plus, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 import BadgePatch from "@/components/BadgePatch";
+
+const LEADER_ROLES = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader"];
 
 export default function MemberDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [m, setM] = useState(null);
   const [allBadges, setAllBadges] = useState([]);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignBid, setAssignBid] = useState("");
 
-  useEffect(() => {
+  const load = () => {
     api.get(`/members/${id}`).then(r => setM(r.data));
     api.get("/badges").then(r => setAllBadges(r.data));
-  }, [id]);
+  };
+  useEffect(() => { load(); }, [id]);
 
   if (!m) return <div>Loading…</div>;
 
   const badgeById = (bid) => allBadges.find(b => b.badge_id === bid);
   const attStats = m.attendance?.reduce((acc, a) => { acc[a.status] = (acc[a.status] || 0) + 1; return acc; }, {}) || {};
+  const isLeader = user?.role && LEADER_ROLES.includes(user.role);
+  const takenBadgeIds = new Set((m.badges || []).map(mb => mb.badge_id));
+  const availableBadges = allBadges.filter(b => !takenBadgeIds.has(b.badge_id) && !b.archived);
+
+  const assign = async () => {
+    if (!assignBid) return toast.error("Choose a badge");
+    try {
+      await api.post("/badges/assign", { member_id: m.member_id, badge_id: assignBid });
+      toast.success("Badge assigned — scout notified");
+      setAssignOpen(false); setAssignBid(""); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
+  };
+
+  const award = async (badge_id) => {
+    try {
+      await api.post("/badges/award", { member_id: m.member_id, badge_id });
+      toast.success("Badge awarded!");
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
+  };
 
   return (
     <div className="space-y-6">
@@ -90,7 +120,14 @@ export default function MemberDetail() {
       </div>
 
       <Card className="clay-card p-6">
-        <h3 className="font-display font-bold mb-4">Badges</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-bold">Badges</h3>
+          {isLeader && (
+            <Button size="sm" onClick={() => setAssignOpen(true)} className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)] h-8" data-testid="assign-badge-btn">
+              <Plus size={12} className="mr-1"/> Assign badge
+            </Button>
+          )}
+        </div>
         <div className="flex flex-wrap gap-8">
           {(m.badges || []).map(mb => {
             const b = badgeById(mb.badge_id);
@@ -98,17 +135,48 @@ export default function MemberDetail() {
             const total = b.requirements?.length || 1;
             const done = (mb.completed_requirements || []).filter(Boolean).length;
             const pct = Math.round(done / total * 100);
+            const status = mb.status || (mb.awarded ? "awarded" : "in_progress");
             return (
-              <div key={mb.mb_id} className="text-center">
+              <div key={mb.mb_id} className="text-center" data-testid={`mbr-badge-${mb.badge_id}`}>
                 <BadgePatch badge={b} awarded={mb.awarded} progress={pct} />
-                <div className="text-xs font-semibold mt-2 max-w-[80px]">{b.name}</div>
-                {mb.awarded && <div className="text-[10px] uppercase tracking-widest text-[hsl(149,40%,30%)] font-bold">Awarded</div>}
+                <div className="text-xs font-semibold mt-2 max-w-[96px]">{b.name}</div>
+                {status === "awarded" && <div className="text-[10px] uppercase tracking-widest text-[hsl(149,40%,30%)] font-bold mt-0.5">Awarded</div>}
+                {status === "in_progress" && <div className="text-[10px] uppercase tracking-widest text-[hsl(12,65%,55%)] font-bold mt-0.5">{pct}%</div>}
+                {status === "requested" && <div className="text-[10px] uppercase tracking-widest text-[hsl(32,87%,55%)] font-bold mt-0.5">Awaiting approval</div>}
+                {isLeader && status === "in_progress" && (
+                  <button
+                    onClick={() => award(mb.badge_id)}
+                    className="text-[10px] mt-1 text-[hsl(149,40%,30%)] hover:underline font-bold"
+                    data-testid={`award-badge-${mb.badge_id}`}
+                  >Mark awarded</button>
+                )}
               </div>
             );
           })}
           {!m.badges?.length && <div className="text-sm text-muted-foreground">No badges yet.</div>}
         </div>
       </Card>
+
+      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Assign a badge</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Pick a badge for <b>{m.full_name}</b> to start working on. They'll get a notification.</p>
+            <Select value={assignBid} onValueChange={setAssignBid}>
+              <SelectTrigger data-testid="assign-badge-select"><SelectValue placeholder="Choose a badge"/></SelectTrigger>
+              <SelectContent>
+                {availableBadges.length === 0 && <div className="p-3 text-sm text-muted-foreground">No available badges — this scout has all of them.</div>}
+                {availableBadges.map(b => (
+                  <SelectItem key={b.badge_id} value={b.badge_id}>
+                    {b.name} · {b.section} · {b.difficulty}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button onClick={assign} disabled={!assignBid} className="btn-pill w-full bg-[hsl(149,40%,30%)]" data-testid="assign-badge-submit">Assign</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {m.notes && (
         <Card className="clay-card p-6">
