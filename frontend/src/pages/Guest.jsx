@@ -47,6 +47,7 @@ export default function Guest() {
     api.get("/public/galleries").then(r => setGalleries(r.data)).catch(() => {});
     api.get("/public/resources").then(r => setResources(r.data)).catch(() => {});
     api.get("/public/homepage-settings").then(r => setSettings(r.data)).catch(() => {});
+    api.get("/public/translations").then(r => setDict(r.data || {})).catch(() => {});
   }, []);
 
   const defaultOrder = ["chapters", "events", "badges", "newsletters", "leaders", "galleries", "resources"];
@@ -55,7 +56,12 @@ export default function Guest() {
   const footer = settings?.footer || {};
 
   const setLangPersist = (l) => { setLang(l); localStorage.setItem("scout_lang", l); };
-  const t = (en, hy) => (lang === "hy" ? hy : en);
+  const [dict, setDict] = useState({});
+  const t = (en, hy) => {
+    if (lang !== "hy") return en;
+    // Prefer DB-managed translation, then the JSX-provided fallback, then EN
+    return (dict[en] || hy || en);
+  };
 
   return (
     <div className="min-h-screen">

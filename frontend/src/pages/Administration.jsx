@@ -97,6 +97,7 @@ export default function Administration() {
           <TabsTrigger value="users" className="rounded-full" data-testid="tab-users">Users</TabsTrigger>
           {user?.role === "national_admin" && <TabsTrigger value="audit" className="rounded-full" data-testid="tab-audit">Audit Log</TabsTrigger>}
           {user?.role === "national_admin" && <TabsTrigger value="homepage" className="rounded-full" data-testid="tab-homepage">Homepage</TabsTrigger>}
+          {user?.role === "national_admin" && <TabsTrigger value="translations" className="rounded-full" data-testid="tab-translations">Translations</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="pending">
@@ -254,7 +255,137 @@ export default function Administration() {
             <HomepageSettings/>
           </TabsContent>
         )}
+
+        {user?.role === "national_admin" && (
+          <TabsContent value="translations">
+            <TranslationsManager/>
+          </TabsContent>
+        )}
       </Tabs>
+    </div>
+  );
+}
+
+function TranslationsManager() {
+  const [items, setItems] = useState([]);
+  const [q, setQ] = useState("");
+  const [dirty, setDirty] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [newEn, setNewEn] = useState("");
+  const [newHy, setNewHy] = useState("");
+
+  const load = () => api.get("/translations").then(r => { setItems(r.data); setDirty({}); }).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const setHy = (en, hy) => setDirty(prev => ({ ...prev, [en]: hy }));
+
+  const saveAll = async () => {
+    const entries = Object.entries(dirty).map(([en, hy]) => ({ en, hy }));
+    if (!entries.length) return toast("Nothing to save");
+    setSaving(true);
+    try {
+      await api.put("/translations", { entries });
+      toast.success(`Saved ${entries.length} translation${entries.length === 1 ? "" : "s"}`);
+      load();
+    } catch { toast.error("Save failed"); }
+    finally { setSaving(false); }
+  };
+
+  const addNew = async () => {
+    if (!newEn.trim()) return toast.error("Enter the English text first");
+    try {
+      await api.put("/translations", { entries: [{ en: newEn.trim(), hy: newHy.trim() }] });
+      toast.success("Added");
+      setNewEn(""); setNewHy(""); load();
+    } catch { toast.error("Failed"); }
+  };
+
+  const remove = async (en) => {
+    if (!window.confirm(`Delete translation for “${en}”?`)) return;
+    try { await api.delete(`/translations?en=${encodeURIComponent(en)}`); toast.success("Deleted"); load(); }
+    catch { toast.error("Failed"); }
+  };
+
+  const filtered = items.filter(it => {
+    if (!q.trim()) return true;
+    const s = q.toLowerCase();
+    return (it.en || "").toLowerCase().includes(s) || (it.hy || "").toLowerCase().includes(s);
+  });
+
+  const untranslated = filtered.filter(it => !it.hy).length;
+  const dirtyCount = Object.keys(dirty).length;
+
+  return (
+    <div className="space-y-4 mt-4">
+      <Card className="clay-card p-6" data-testid="translations-add-card">
+        <div className="flex items-center gap-2 mb-4">
+          <Globe size={16} className="text-[hsl(12,65%,55%)]"/>
+          <h3 className="font-display font-bold text-lg">Add or update a phrase</h3>
+        </div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div>
+            <Label>English (source key)</Label>
+            <Input value={newEn} onChange={e => setNewEn(e.target.value)} placeholder="e.g. Prepared. Together. Outdoors." data-testid="tr-new-en"/>
+          </div>
+          <div>
+            <Label>Armenian</Label>
+            <Input value={newHy} onChange={e => setNewHy(e.target.value)} placeholder="օրինակ՝ Պատրաստ։ Միասին։ Բնության մեջ։" data-testid="tr-new-hy"/>
+          </div>
+        </div>
+        <div className="flex justify-end mt-3">
+          <Button onClick={addNew} className="btn-pill bg-[hsl(149,40%,30%)]" data-testid="tr-add-btn">
+            <Save size={14} className="mr-2"/> Save phrase
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Any phrase saved here immediately overrides the built-in Armenian text on the homepage. Match the exact English wording (case + punctuation) so the site can find it.
+        </p>
+      </Card>
+
+      <Card className="clay-card p-6" data-testid="translations-list-card">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <div>
+            <h3 className="font-display font-bold text-lg">Dictionary <span className="text-muted-foreground font-normal">({items.length})</span></h3>
+            {untranslated > 0 && <div className="text-xs text-[hsl(0,65%,55%)] mt-1">{untranslated} phrase{untranslated === 1 ? "" : "s"} still empty in Armenian</div>}
+          </div>
+          <div className="flex items-center gap-2">
+            <Input placeholder="Search…" value={q} onChange={e => setQ(e.target.value)} className="w-64" data-testid="tr-search"/>
+            <Button onClick={saveAll} disabled={!dirtyCount || saving} className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" data-testid="tr-save-all">
+              <Save size={14} className="mr-2"/> {saving ? "Saving…" : dirtyCount ? `Save ${dirtyCount}` : "No changes"}
+            </Button>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-10">
+            {items.length === 0 ? "No saved translations yet — add one above." : "No matches for that search."}
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+            {filtered.map(it => {
+              const value = it.en in dirty ? dirty[it.en] : (it.hy || "");
+              return (
+                <div key={it.en} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_40px] gap-2 items-center p-3 rounded-xl border border-border hover:bg-muted/30" data-testid={`tr-row-${it.en.slice(0,20)}`}>
+                  <div className="text-sm font-medium truncate" title={it.en}>{it.en}</div>
+                  <Input
+                    value={value}
+                    onChange={e => setHy(it.en, e.target.value)}
+                    placeholder="Հայերեն"
+                    className={value !== (it.hy || "") ? "border-[hsl(12,65%,63%)]" : ""}
+                    data-testid={`tr-input-${it.en.slice(0,20)}`}
+                  />
+                  <button
+                    onClick={() => remove(it.en)}
+                    className="w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(0,65%,55%)]/10 hover:text-[hsl(0,65%,55%)] flex items-center justify-center justify-self-end"
+                    data-testid={`tr-del-${it.en.slice(0,20)}`}
+                    title="Delete"
+                  ><Trash2 size={14}/></button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

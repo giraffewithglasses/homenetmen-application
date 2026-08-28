@@ -499,6 +499,44 @@ async def update_homepage_settings(payload: HomepageSettingsIn, user: dict = Dep
     await audit(user, "update", "homepage_settings", "singleton")
     return {"ok": True}
 
+@api.get("/public/translations")
+async def public_translations():
+    """Public dictionary { en_string: hy_string }. Consumed by every page's t() helper."""
+    docs = await db.translations.find({}, {"_id": 0, "en": 1, "hy": 1}).to_list(5000)
+    return {d["en"]: d.get("hy", "") for d in docs}
+
+@api.get("/translations")
+async def list_translations(user: dict = Depends(require_roles("national_admin"))):
+    return await db.translations.find({}, {"_id": 0}).sort("en", 1).to_list(5000)
+
+class TranslationEntry(BaseModel):
+    en: str
+    hy: str = ""
+
+class TranslationsBulkIn(BaseModel):
+    entries: List[TranslationEntry]
+
+@api.put("/translations")
+async def upsert_translations(payload: TranslationsBulkIn, user: dict = Depends(require_roles("national_admin"))):
+    """Bulk upsert. Keyed by `en` string (canonical English)."""
+    now = now_iso()
+    ops = 0
+    for e in payload.entries:
+        if not e.en.strip(): continue
+        await db.translations.update_one(
+            {"en": e.en},
+            {"$set": {"en": e.en, "hy": e.hy, "updated_at": now, "updated_by": user["email"]}},
+            upsert=True,
+        )
+        ops += 1
+    await audit(user, "bulk_upsert", "translation", "*", {"count": ops})
+    return {"ok": True, "count": ops}
+
+@api.delete("/translations")
+async def delete_translation(en: str, user: dict = Depends(require_roles("national_admin"))):
+    r = await db.translations.delete_one({"en": en})
+    return {"ok": True, "deleted": r.deleted_count}
+
 # ---------- Auth Endpoints ----------
 @api.post("/auth/register")
 async def register(payload: RegisterIn, response: Response):
