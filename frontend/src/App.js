@@ -30,6 +30,7 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentCancel from "@/pages/PaymentCancel";
 import MembershipCard from "@/pages/MembershipCard";
 import VerifyMember from "@/pages/VerifyMember";
+import Finance from "@/pages/Finance";
 import "@/App.css";
 
 function Router() {
@@ -62,6 +63,7 @@ function Router() {
         <Route path="/galleries" element={<Galleries />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/administration" element={<Administration />} />
+        <Route path="/finance" element={<Finance />} />
         <Route path="/trash" element={<Trash />} />
         <Route path="/profile" element={<Profile />} />
       </Route>

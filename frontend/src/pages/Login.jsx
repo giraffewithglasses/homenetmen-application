@@ -88,7 +88,7 @@ export default function Login() {
       <div
         className="hidden lg:block lg:col-span-3 relative overflow-hidden"
         style={{
-          backgroundImage: "url('https://images.unsplash.com/photo-1599828586134-fbaff96c63d5?crop=entropy&cs=srgb&fm=jpg&q=85')",
+          backgroundImage: "url('/brand/signin-hero.webp')",
           backgroundSize: "cover", backgroundPosition: "center",
         }}
       >

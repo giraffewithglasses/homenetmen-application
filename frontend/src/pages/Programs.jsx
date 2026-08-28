@@ -27,7 +27,7 @@ const emptyForm = {
   title: "", title_hy: "", description: "", date: "", start_time: "10:00",
   end_time: "13:00", location: "", section: "Scouts", sections: ["Scouts"],
   level: "chapter", expected_participants: 20, capacity: 0, waitlist_enabled: false,
-  materials: "", objectives: "", activities: [], fee: 0, currency: "usd",
+  materials: "", objectives: "", activities: [], fee: 0, currency: "amd", prerequisites: "",
 };
 
 export default function Programs() {
@@ -174,12 +174,18 @@ export default function Programs() {
                 </div>
 
                 <div className="col-span-2">
-                  <Label>Fee (USD — leave 0 for free events)</Label>
+                  <Label>Fee (AMD ֏ — leave 0 for free events)</Label>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-muted-foreground">$</span>
-                    <Input type="number" min="0" step="0.01" value={form.fee} onChange={e => setForm({...form, fee: Number(e.target.value)})} data-testid="prg-fee"/>
+                    <span className="text-muted-foreground">֏</span>
+                    <Input type="number" min="0" step="1" value={form.fee} onChange={e => setForm({...form, fee: Number(e.target.value)})} data-testid="prg-fee"/>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">Scouts pay via Stripe checkout before their spot is confirmed.</p>
+                </div>
+
+                <div className="col-span-2">
+                  <Label>Prerequisites (optional)</Label>
+                  <Textarea rows={3} placeholder="e.g. Must have completed First Aid badge, minimum age 12, guardian consent form" value={form.prerequisites || ""} onChange={e => setForm({...form, prerequisites: e.target.value})} data-testid="prg-prerequisites"/>
+                  <p className="text-xs text-muted-foreground mt-1">Shown on the program page so scouts know what to prepare.</p>
                 </div>
 
                 <div><Label>Expected participants</Label><Input type="number" value={form.expected_participants} onChange={e => setForm({...form, expected_participants: Number(e.target.value)})}/></div>
@@ -229,7 +235,7 @@ export default function Programs() {
                   )}
                   {Number(p.fee) > 0 && (
                     <div className="flex items-center gap-2 text-[hsl(12,65%,55%)] font-bold" data-testid={`prg-fee-${p.program_id}`}>
-                      <DollarSign size={12}/> ${Number(p.fee).toFixed(2)} {(p.currency || "usd").toUpperCase()}
+                      <DollarSign size={12}/> ֏{Number(p.fee).toLocaleString()} AMD
                     </div>
                   )}
                 </div>
@@ -250,7 +256,7 @@ export default function Programs() {
                     )}
                     {!mine && (
                       <Button size="sm" className="w-full btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" onClick={() => register(p)} disabled={full && !p.waitlist_enabled} data-testid={`prg-reg-${p.program_id}`}>
-                        {full ? (p.waitlist_enabled ? "Join waitlist" : "Full") : (Number(p.fee) > 0 ? `Pay $${Number(p.fee).toFixed(2)} & register` : "Register")}
+                        {full ? (p.waitlist_enabled ? "Join waitlist" : "Full") : (Number(p.fee) > 0 ? `Pay ֏${Number(p.fee).toLocaleString()} & register` : "Register")}
                       </Button>
                     )}
                   </div>

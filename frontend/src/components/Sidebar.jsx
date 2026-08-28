@@ -3,7 +3,7 @@ import { NavLink, useNavigate, Link } from "react-router-dom";
 import {
   LayoutDashboard, Newspaper, Mail, Building2, Compass, CalendarDays,
   Award, TrendingUp, Users, ClipboardCheck, Folder, Bell, Settings,
-  UserCircle, LogOut, Menu, X, Flame, Trash2, Home, Images,
+  UserCircle, LogOut, Menu, X, Flame, Trash2, Home, Images, Wallet,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ const ALL_ITEMS = [
   { to: "/galleries", label: "Galleries", labelHy: "Պատկերասրահ", icon: Images, roles: ALL_ROLES },
   { to: "/notifications", label: "Notifications", labelHy: "Ծանուցումներ", icon: Bell, roles: ALL_ROLES },
   { to: "/administration", label: "Administration", labelHy: "Կառավարում", icon: Settings, roles: LEADER_TIER },
+  { to: "/finance", label: "Finance", labelHy: "Ֆինանսներ", icon: Wallet, roles: LEADER_TIER },
   { to: "/trash", label: "Trash Bin", labelHy: "Աղբարկղ", icon: Trash2, roles: ["national_admin", "chapter_admin"] },
   { to: "/profile", label: "Profile", labelHy: "Պրոֆիլ", icon: UserCircle, roles: ALL_ROLES },
 ];

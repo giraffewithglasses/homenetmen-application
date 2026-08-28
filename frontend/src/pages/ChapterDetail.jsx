@@ -74,8 +74,10 @@ export default function ChapterDetail() {
           ><Pencil size={14} className="mr-2"/>Edit</Button>
         )}
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full flex items-center justify-center bg-[hsl(12,65%,63%)] shadow-inner border-2 border-white/30">
-            <Building2 size={26} />
+          <div className="w-16 h-16 rounded-full bg-white shadow-inner border-2 border-white/40 flex items-center justify-center overflow-hidden p-1">
+            {c.logo
+              ? <img src={c.logo} alt="" className="w-full h-full object-contain rounded-full"/>
+              : <Building2 size={26} className="text-[hsl(12,65%,63%)]"/>}
           </div>
           <div>
             <div className="uppercase-label" style={{ color: "hsl(32 87% 75%)" }}>Chapter</div>

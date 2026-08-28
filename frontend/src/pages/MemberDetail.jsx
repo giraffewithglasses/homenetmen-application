@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { ArrowLeft, Mail, Phone, Calendar, User, Shield, IdCard, Plus, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ export default function MemberDetail() {
   const [allBadges, setAllBadges] = useState([]);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignBid, setAssignBid] = useState("");
+  const [tracking, setTracking] = useState(null); // { mb, badge }
 
   const load = () => {
     api.get(`/members/${id}`).then(r => setM(r.data));
@@ -52,6 +54,23 @@ export default function MemberDetail() {
       load();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
   };
+
+  const toggleRequirement = async (badge_id, idx, completed) => {
+    try {
+      await api.post("/badges/progress", { member_id: m.member_id, badge_id, requirement_index: idx, completed });
+      // optimistic update
+      setTracking(prev => {
+        if (!prev || prev.badge.badge_id !== badge_id) return prev;
+        const arr = [...(prev.mb.completed_requirements || [])];
+        while (arr.length < (prev.badge.requirements || []).length) arr.push(false);
+        arr[idx] = completed;
+        return { ...prev, mb: { ...prev.mb, completed_requirements: arr } };
+      });
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
+  };
+
+  const openTrack = (mb, badge) => setTracking({ mb, badge });
 
   return (
     <div className="space-y-6">
@@ -136,19 +155,31 @@ export default function MemberDetail() {
             const done = (mb.completed_requirements || []).filter(Boolean).length;
             const pct = Math.round(done / total * 100);
             const status = mb.status || (mb.awarded ? "awarded" : "in_progress");
+            const canTrack = isLeader && status === "in_progress";
             return (
               <div key={mb.mb_id} className="text-center" data-testid={`mbr-badge-${mb.badge_id}`}>
-                <BadgePatch badge={b} awarded={mb.awarded} progress={pct} />
-                <div className="text-xs font-semibold mt-2 max-w-[96px]">{b.name}</div>
+                <button
+                  type="button"
+                  onClick={canTrack ? () => openTrack(mb, b) : undefined}
+                  className={`inline-block ${canTrack ? "hover:scale-105 transition-transform cursor-pointer" : ""}`}
+                  data-testid={`open-progress-${mb.badge_id}`}
+                >
+                  <BadgePatch badge={b} awarded={mb.awarded} progress={pct} />
+                </button>
+                <div className="text-xs font-semibold mt-2 max-w-[96px] mx-auto">{b.name}</div>
                 {status === "awarded" && <div className="text-[10px] uppercase tracking-widest text-[hsl(149,40%,30%)] font-bold mt-0.5">Awarded</div>}
-                {status === "in_progress" && <div className="text-[10px] uppercase tracking-widest text-[hsl(12,65%,55%)] font-bold mt-0.5">{pct}%</div>}
+                {status === "in_progress" && (
+                  <div className="text-[10px] uppercase tracking-widest text-[hsl(12,65%,55%)] font-bold mt-0.5">
+                    {done} / {total} · {pct}%
+                  </div>
+                )}
                 {status === "requested" && <div className="text-[10px] uppercase tracking-widest text-[hsl(32,87%,55%)] font-bold mt-0.5">Awaiting approval</div>}
-                {isLeader && status === "in_progress" && (
+                {canTrack && (
                   <button
-                    onClick={() => award(mb.badge_id)}
-                    className="text-[10px] mt-1 text-[hsl(149,40%,30%)] hover:underline font-bold"
-                    data-testid={`award-badge-${mb.badge_id}`}
-                  >Mark awarded</button>
+                    onClick={() => openTrack(mb, b)}
+                    className="text-[10px] mt-1 text-[hsl(12,65%,55%)] hover:underline font-bold"
+                    data-testid={`track-badge-${mb.badge_id}`}
+                  >Track progress</button>
                 )}
               </div>
             );
@@ -156,6 +187,75 @@ export default function MemberDetail() {
           {!m.badges?.length && <div className="text-sm text-muted-foreground">No badges yet.</div>}
         </div>
       </Card>
+
+      <Dialog open={!!tracking} onOpenChange={(o) => { if (!o) setTracking(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="badge-progress-dialog">
+          {tracking && (() => {
+            const reqs = tracking.badge.requirements || [];
+            const done = (tracking.mb.completed_requirements || []).filter(Boolean).length;
+            const total = reqs.length || 1;
+            const pct = Math.round(done / total * 100);
+            const allDone = done === total && total > 0;
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-3">
+                    <BadgePatch badge={tracking.badge} awarded size={40}/>
+                    <span>{tracking.badge.name}</span>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">{tracking.badge.description}</p>
+
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="uppercase-label">Progress</span>
+                      <span className="font-bold">{done} of {total} · {pct}%</span>
+                    </div>
+                    <Progress value={pct} className="h-2"/>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="uppercase-label">Requirements</div>
+                    {reqs.length === 0 && <div className="text-sm text-muted-foreground">This badge has no requirements yet — ask a national admin to edit it.</div>}
+                    {reqs.map((r, i) => {
+                      const checked = (tracking.mb.completed_requirements || [])[i] === true;
+                      return (
+                        <label key={i} className="flex items-start gap-3 p-3 rounded-xl border border-border cursor-pointer hover:bg-muted/50" data-testid={`req-row-${i}`}>
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) => toggleRequirement(tracking.badge.badge_id, i, !!v)}
+                            className="mt-0.5"
+                            data-testid={`req-check-${i}`}
+                          />
+                          <div className="flex-1 text-sm">
+                            <div className={checked ? "line-through text-muted-foreground" : ""}>{r}</div>
+                          </div>
+                          {checked && <CheckCircle2 size={16} className="text-[hsl(149,40%,30%)] mt-0.5"/>}
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {allDone ? (
+                    <Button
+                      onClick={async () => { await award(tracking.badge.badge_id); setTracking(null); }}
+                      className="btn-pill w-full bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]"
+                      data-testid="mark-awarded-btn"
+                    >
+                      <CheckCircle2 size={14} className="mr-2"/> All done — mark awarded
+                    </Button>
+                  ) : (
+                    <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground text-center">
+                      Complete all requirements to award this badge.
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="max-w-md">

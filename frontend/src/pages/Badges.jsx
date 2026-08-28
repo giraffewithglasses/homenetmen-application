@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, Archive, ArchiveRestore, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Plus, Archive, ArchiveRestore, CheckCircle2, XCircle, Clock, Pencil } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import BadgePatch from "@/components/BadgePatch";
 
@@ -31,6 +31,13 @@ export default function Badges() {
   const [reqInput, setReqInput] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [requests, setRequests] = useState([]);
+  const [editingId, setEditingId] = useState(null);
+
+  const emptyForm = () => ({
+    name: "", name_hy: "", icon: "star", icon_image: "", color: "#2D6A4F", description: "",
+    section: "Scouts", category: "Scouting Skills", difficulty: "medium",
+    recommended_age: "12+", requirements: [],
+  });
 
   const isLeader = LEADER_ROLES.includes(user?.role);
 
@@ -50,9 +57,29 @@ export default function Badges() {
   };
 
   const save = async () => {
-    try { await api.post("/badges", form); toast.success("Badge created"); setOpen(false); load(); }
-    catch { toast.error("Failed"); }
+    try {
+      if (editingId) {
+        await api.put(`/badges/${editingId}`, form);
+        toast.success("Badge updated");
+      } else {
+        await api.post("/badges", form);
+        toast.success("Badge created");
+      }
+      setOpen(false); setEditingId(null); setForm(emptyForm()); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
   };
+  const openEdit = (b) => {
+    setEditingId(b.badge_id);
+    setForm({
+      name: b.name || "", name_hy: b.name_hy || "", icon: b.icon || "star",
+      icon_image: b.icon_image || "", color: b.color || "#2D6A4F",
+      description: b.description || "", section: b.section || "Scouts",
+      category: b.category || "Scouting Skills", difficulty: b.difficulty || "medium",
+      recommended_age: b.recommended_age || "12+", requirements: b.requirements || [],
+    });
+    setOpen(true);
+  };
+  const openNew = () => { setEditingId(null); setForm(emptyForm()); setOpen(true); };
   const archive = async (bid, archived) => {
     try {
       await api.post(`/badges/${bid}/${archived ? "unarchive" : "archive"}`);
@@ -87,12 +114,12 @@ export default function Badges() {
             </SelectContent>
           </Select>
           {user?.role === "national_admin" && (
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(emptyForm()); } }}>
               <DialogTrigger asChild>
-                <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-badge-btn"><Plus size={16} className="mr-2"/>New Badge</Button>
+                <Button className="btn-pill bg-[hsl(12,65%,63%)]" onClick={openNew} data-testid="new-badge-btn"><Plus size={16} className="mr-2"/>New Badge</Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>New Badge</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingId ? "Edit Badge" : "New Badge"}</DialogTitle></DialogHeader>
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Name</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} data-testid="bdg-name"/></div>
                   <div><Label>Name (Armenian)</Label><Input value={form.name_hy} onChange={e => setForm({...form, name_hy: e.target.value})}/></div>
@@ -161,7 +188,7 @@ export default function Badges() {
                     </ul>
                   </div>
                 </div>
-                <Button onClick={save} className="btn-pill w-full bg-[hsl(149,40%,30%)] mt-2" data-testid="bdg-save">Create Badge</Button>
+                <Button onClick={save} className="btn-pill w-full bg-[hsl(149,40%,30%)] mt-2" data-testid="bdg-save">{editingId ? "Save changes" : "Create Badge"}</Button>
               </DialogContent>
             </Dialog>
           )}
@@ -200,14 +227,22 @@ export default function Badges() {
         {filtered.map(b => (
           <Card key={b.badge_id} className={`clay-card p-6 hover-lift relative ${b.archived ? "opacity-60" : ""}`}>
             {user?.role === "national_admin" && (
-              <button
-                onClick={() => archive(b.badge_id, b.archived)}
-                className="absolute top-3 right-3 w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(32,87%,67%)]/20 hover:text-[hsl(32,87%,55%)] flex items-center justify-center"
-                data-testid={`archive-bdg-${b.badge_id}`}
-                title={b.archived ? "Unarchive" : "Archive"}
-              >
-                {b.archived ? <ArchiveRestore size={14}/> : <Archive size={14}/>}
-              </button>
+              <div className="absolute top-3 right-3 flex gap-1">
+                <button
+                  onClick={() => openEdit(b)}
+                  className="w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(12,65%,63%)]/20 hover:text-[hsl(12,65%,63%)] flex items-center justify-center"
+                  data-testid={`edit-bdg-${b.badge_id}`}
+                  title="Edit badge"
+                ><Pencil size={14}/></button>
+                <button
+                  onClick={() => archive(b.badge_id, b.archived)}
+                  className="w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(32,87%,67%)]/20 hover:text-[hsl(32,87%,55%)] flex items-center justify-center"
+                  data-testid={`archive-bdg-${b.badge_id}`}
+                  title={b.archived ? "Unarchive" : "Archive"}
+                >
+                  {b.archived ? <ArchiveRestore size={14}/> : <Archive size={14}/>}
+                </button>
+              </div>
             )}
             <div className="flex items-start gap-4">
               <BadgePatch badge={b} awarded />

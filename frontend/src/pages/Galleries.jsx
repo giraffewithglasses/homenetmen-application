@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, Image as ImageIcon, Trash2, X } from "lucide-react";
+import { Plus, Image as ImageIcon, Trash2, X, Download, Camera } from "lucide-react";
 
 export default function Galleries() {
   const { user } = useAuth();
@@ -82,19 +82,53 @@ export default function Galleries() {
         )}
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {items.map(g => (
-          <Card key={g.gallery_id} className="clay-card overflow-hidden hover-lift cursor-pointer group relative" onClick={() => setView(g)} data-testid={`gallery-${g.gallery_id}`}>
-            <div className="h-48 bg-muted relative">
-              {g.cover ? <img src={g.cover} alt="" className="w-full h-full object-cover"/> : <div className="flex items-center justify-center h-full text-muted-foreground"><ImageIcon size={40}/></div>}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"/>
-              <div className="absolute bottom-3 left-4 right-4 text-white">
-                <div className="font-display font-bold text-lg">{g.title}</div>
-                <div className="text-xs opacity-80">{g.images?.length || 0} photos</div>
+          <Card key={g.gallery_id} className="clay-card overflow-hidden hover-lift group relative" data-testid={`gallery-${g.gallery_id}`}>
+            <div className="h-56 bg-muted relative cursor-pointer overflow-hidden" onClick={() => setView(g)}>
+              {g.cover
+                ? <img src={g.cover} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
+                : (g.images?.[0]?.data
+                    ? <img src={g.images[0].data} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
+                    : <div className="flex items-center justify-center h-full text-muted-foreground/40"><Camera size={56} strokeWidth={1.4}/></div>
+                  )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"/>
+              <div className="absolute top-3 left-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 backdrop-blur text-[10px] font-bold uppercase tracking-widest text-[hsl(149,40%,30%)]">
+                <ImageIcon size={11}/> {g.images?.length || 0}
+              </div>
+            </div>
+            <div className="p-5">
+              <div className="uppercase-label">{new Date(g.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</div>
+              <div className="font-display font-bold text-lg mt-1 line-clamp-1">{g.title}</div>
+              {g.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{g.description}</p>}
+              <div className="mt-4 flex items-center gap-2">
+                <Button size="sm" variant="outline" className="btn-pill flex-1" onClick={() => setView(g)} data-testid={`view-gallery-${g.gallery_id}`}>
+                  View
+                </Button>
+                <Button
+                  size="sm"
+                  className="btn-pill flex-1 bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    toast("Preparing your download…");
+                    try {
+                      const r = await api.get(`/galleries/${g.gallery_id}/download`, { responseType: "blob" });
+                      const url = URL.createObjectURL(r.data);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `${(g.title || "gallery").replace(/[^\w.-]+/g, "_")}.zip`;
+                      document.body.appendChild(a); a.click(); a.remove();
+                      URL.revokeObjectURL(url);
+                    } catch { toast.error("Download failed"); }
+                  }}
+                  data-testid={`download-gallery-${g.gallery_id}`}
+                >
+                  <Download size={12} className="mr-1"/> ZIP
+                </Button>
               </div>
             </div>
             {canManage && (
-              <button onClick={(e) => { e.stopPropagation(); remove(g.gallery_id); }} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 text-muted-foreground hover:text-[hsl(0,65%,55%)] flex items-center justify-center opacity-0 group-hover:opacity-100" data-testid={`del-gallery-${g.gallery_id}`}>
+              <button onClick={(e) => { e.stopPropagation(); remove(g.gallery_id); }} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/95 text-muted-foreground hover:text-[hsl(0,65%,55%)] flex items-center justify-center opacity-0 group-hover:opacity-100" data-testid={`del-gallery-${g.gallery_id}`}>
                 <Trash2 size={14}/>
               </button>
             )}

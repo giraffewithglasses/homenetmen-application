@@ -162,6 +162,46 @@ def clean(d: dict) -> dict:
     d.pop("_id", None)
     return d
 
+# ---------- Security: brute-force protection ----------
+_LOGIN_ATTEMPTS: dict = {}  # key -> {count: int, first: datetime, locked_until: datetime|None}
+LOGIN_WINDOW = timedelta(minutes=15)
+LOGIN_MAX_ATTEMPTS = 6
+LOGIN_LOCKOUT = timedelta(minutes=15)
+
+def _rate_key(request: Request, email: str) -> str:
+    ip = (request.headers.get("x-forwarded-for", "") or request.client.host or "").split(",")[0].strip()
+    return f"{ip}::{email.lower()}"
+
+def check_login_rate(request: Request, email: str) -> None:
+    key = _rate_key(request, email)
+    now = datetime.now(timezone.utc)
+    rec = _LOGIN_ATTEMPTS.get(key)
+    if rec and rec.get("locked_until") and rec["locked_until"] > now:
+        secs = int((rec["locked_until"] - now).total_seconds())
+        raise HTTPException(429, f"Too many failed attempts. Try again in {secs // 60 + 1} min.")
+    if rec and now - rec["first"] > LOGIN_WINDOW:
+        _LOGIN_ATTEMPTS.pop(key, None)
+
+def register_failed_login(request: Request, email: str) -> None:
+    key = _rate_key(request, email)
+    now = datetime.now(timezone.utc)
+    rec = _LOGIN_ATTEMPTS.get(key) or {"count": 0, "first": now, "locked_until": None}
+    rec["count"] += 1
+    if rec["count"] >= LOGIN_MAX_ATTEMPTS:
+        rec["locked_until"] = now + LOGIN_LOCKOUT
+    _LOGIN_ATTEMPTS[key] = rec
+
+def clear_login_attempts(request: Request, email: str) -> None:
+    _LOGIN_ATTEMPTS.pop(_rate_key(request, email), None)
+
+def validate_password_strength(pw: str) -> None:
+    if len(pw) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    if not any(c.isdigit() for c in pw):
+        raise HTTPException(400, "Password must contain at least one number")
+    if not any(c.isalpha() for c in pw):
+        raise HTTPException(400, "Password must contain at least one letter")
+
 # ---------- Models ----------
 class GalleryIn(BaseModel):
     title: str
@@ -262,8 +302,9 @@ class ProgramIn(BaseModel):
     related_badges: List[str] = []
     activities: List[dict] = []  # [{time, title, description}]
     cover: str = ""
-    fee: float = 0.0  # program fee in USD (0 = free)
-    currency: str = "usd"
+    fee: float = 0.0  # program fee (0 = free)
+    currency: str = "amd"
+    prerequisites: str = ""
 
 class AttendanceIn(BaseModel):
     program_id: str
@@ -429,6 +470,7 @@ async def public_verify_member(member_id: str):
 @api.post("/auth/register")
 async def register(payload: RegisterIn, response: Response):
     email = payload.email.lower()
+    validate_password_strength(payload.password)
     if await db.users.find_one({"email": email}):
         raise HTTPException(400, "Email already registered")
     chapter = await db.chapters.find_one({"chapter_id": payload.chapter_id})
@@ -491,10 +533,12 @@ async def register(payload: RegisterIn, response: Response):
     }
 
 @api.post("/auth/login")
-async def login(payload: LoginIn, response: Response):
+async def login(payload: LoginIn, response: Response, request: Request):
     email = payload.email.lower()
+    check_login_rate(request, email)
     u = await db.users.find_one({"email": email})
     if not u or not u.get("password_hash") or not verify_password(payload.password, u["password_hash"]):
+        register_failed_login(request, email)
         raise HTTPException(401, "Invalid email or password")
     if u.get("status") == "pending":
         raise HTTPException(403, "Your account is awaiting chapter leader approval.")
@@ -502,6 +546,7 @@ async def login(payload: LoginIn, response: Response):
         raise HTTPException(403, "Your registration was not approved. Please contact your chapter.")
     if u.get("status") == "archived":
         raise HTTPException(403, "Your account has been archived. Please contact your chapter.")
+    clear_login_attempts(request, email)
     access = create_access_token(u["user_id"], email)
     refresh = create_refresh_token(u["user_id"])
     set_auth_cookies(response, access, refresh)
@@ -1391,8 +1436,7 @@ async def change_password(payload: PasswordChangeIn, user: dict = Depends(get_cu
         raise HTTPException(400, "This account signs in with Google; no password to change.")
     if not verify_password(payload.current_password, u["password_hash"]):
         raise HTTPException(401, "Current password is incorrect")
-    if len(payload.new_password) < 6:
-        raise HTTPException(400, "New password must be at least 6 characters")
+    validate_password_strength(payload.new_password)
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"password_hash": hash_password(payload.new_password)}})
     await audit(user, "password_change", "user", user["user_id"])
     return {"ok": True}
@@ -2129,6 +2173,12 @@ app.include_router(api)
 from payments import payments_router, register_payment_routes
 register_payment_routes(db, get_current_user, notify, audit, new_id)
 app.include_router(payments_router)
+
+# Finance routes + gallery zip download
+from finance import finance_router, register_finance_routes, register_gallery_zip_route
+register_finance_routes(db, get_current_user, LEADER_ROLES, is_leader, audit, new_id)
+register_gallery_zip_route(db, finance_router, get_current_user)
+app.include_router(finance_router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -41,6 +41,17 @@ export default function ProgramDetail() {
               <div className="flex items-start gap-2"><Package size={16} className="mt-0.5"/> {p.materials}</div>
               <div className="flex items-start gap-2"><Target size={16} className="mt-0.5"/> {p.objectives}</div>
             </div>
+            {p.prerequisites && (
+              <div className="mt-6 rounded-2xl bg-[hsl(32,87%,67%)]/15 border-l-4 border-[hsl(32,87%,55%)] p-4">
+                <div className="uppercase-label text-[hsl(32,87%,45%)]">Prerequisites</div>
+                <p className="text-sm mt-1 whitespace-pre-line">{p.prerequisites}</p>
+              </div>
+            )}
+            {Number(p.fee) > 0 && (
+              <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(12,65%,63%)]/15 border border-[hsl(12,65%,63%)]/40 font-bold text-[hsl(12,65%,45%)]">
+                ֏{Number(p.fee).toLocaleString()} AMD
+              </div>
+            )}
           </div>
           <div>
             <h3 className="font-display font-bold text-xl mb-4">Schedule</h3>

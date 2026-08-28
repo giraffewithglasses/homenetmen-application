@@ -89,7 +89,7 @@ export default function Guest() {
           className="absolute inset-0"
           style={{
             backgroundImage:
-              "linear-gradient(115deg, hsl(152 43% 15% / 0.92), hsl(149 40% 30% / 0.55)), url('https://images.unsplash.com/photo-1478131143081-80f7f84ca84d?crop=entropy&cs=srgb&fm=jpg&q=85')",
+              "linear-gradient(115deg, hsl(152 43% 15% / 0.92), hsl(149 40% 30% / 0.55)), url('https://images.unsplash.com/photo-1508515053963-70c7cc39dfb5?crop=entropy&cs=srgb&fm=jpg&q=85&w=1920')",
             backgroundSize: "cover", backgroundPosition: "center",
           }}
         />
@@ -268,7 +268,7 @@ export default function Guest() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <Badge className="rounded-full bg-[hsl(149,40%,30%)]">{p.section}</Badge>
-                  {!p.chapter_id && <Badge className="rounded-full ml-1 bg-[hsl(32,87%,67%)] text-[hsl(155,60%,8%)]">National</Badge>}
+                  {!p.chapter_id && <Badge className="rounded-full ml-1 bg-[hsl(32,87%,67%)] text-[hsl(155,60%,8%)]">{t("National", "Ազգային")}</Badge>}
                   <div className="font-display font-bold text-lg mt-2">{lang === "hy" ? p.title_hy || p.title : p.title}</div>
                   <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                     <div className="flex items-center gap-2"><Clock size={12}/>{p.start_time} – {p.end_time}</div>
@@ -577,22 +577,86 @@ export default function Guest() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border">
-        <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-white shadow-inner border-2 border-border p-1">
-              <img src="/brand/homenetmen-logo.webp" alt="HASK" className="w-full h-full object-contain"/>
+      <footer className="border-t border-border bg-[hsl(155,60%,8%)] text-white">
+        <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-14 grid md:grid-cols-4 gap-8">
+          <div className="md:col-span-1">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white shadow-inner p-1">
+                <img src="/brand/homenetmen-logo.webp" alt="HASK" className="w-full h-full object-contain"/>
+              </div>
+              <div>
+                <div className="font-display font-black text-base">HOMENETMEN HASK</div>
+                <div className="text-[10px] tracking-[0.24em] uppercase text-white/60">Est. 1989</div>
+              </div>
             </div>
-            <div>
-              <div className="font-display font-black text-sm">HOMENETMEN HASK</div>
-              <div className="text-[10px] tracking-[0.24em] uppercase text-muted-foreground">© 2026 · Founded 1989</div>
+            <p className="text-xs text-white/70 leading-relaxed">
+              {t(
+                "The scouting movement of HOMENETMEN — building character through the outdoors, community, and service.",
+                "ՀՄԸՄ-ի սկաուտական շարժումը՝ բնության, համայնքի և ծառայության միջոցով բնավորության կրթություն։"
+              )}
+            </p>
+          </div>
+
+          <div>
+            <div className="uppercase-label text-[hsl(32,87%,67%)] mb-3">{t("Headquarters", "Կենտրոն")}</div>
+            <div className="text-sm space-y-2 text-white/80">
+              <div className="flex items-start gap-2">
+                <MapPin size={14} className="mt-0.5 flex-shrink-0"/>
+                <div>
+                  Yervand Kochar 17/6<br/>
+                  Yerevan, Armenia
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Mail size={14}/> <a href="mailto:hq@homenetmen-hask.am" className="hover:text-[hsl(12,65%,63%)]">hq@homenetmen-hask.am</a>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone size={14}/> <a href="tel:+37410000000" className="hover:text-[hsl(12,65%,63%)]">+374 10 000 000</a>
+              </div>
             </div>
           </div>
-          <div className="text-xs text-muted-foreground">
-            <a href="#chapters" className="mr-4 hover:text-foreground">Chapters</a>
-            <a href="#badges" className="mr-4 hover:text-foreground">Badges</a>
-            <a href="#events" className="mr-4 hover:text-foreground">Events</a>
-            <Link to="/login" className="hover:text-foreground">Sign in</Link>
+
+          <div>
+            <div className="uppercase-label text-[hsl(32,87%,67%)] mb-3">{t("Explore", "Դիտել")}</div>
+            <div className="grid grid-cols-2 gap-y-2 text-sm text-white/80">
+              <a href="#chapters" className="hover:text-[hsl(12,65%,63%)]">{t("Chapters", "Մասնաճյուղեր")}</a>
+              <a href="#badges" className="hover:text-[hsl(12,65%,63%)]">{t("Badges", "Կրծքանշաններ")}</a>
+              <a href="#events" className="hover:text-[hsl(12,65%,63%)]">{t("Events", "Ծրագրեր")}</a>
+              <a href="#newsletters" className="hover:text-[hsl(12,65%,63%)]">{t("News", "Նորություններ")}</a>
+              <a href="#leaders" className="hover:text-[hsl(12,65%,63%)]">{t("Leaders", "Ղեկավարներ")}</a>
+              <a href="#resources" className="hover:text-[hsl(12,65%,63%)]">{t("Resources", "Ձեռնարկներ")}</a>
+              <Link to="/login" className="hover:text-[hsl(12,65%,63%)]">{t("Sign in", "Մուտք")}</Link>
+              {user && <Link to="/dashboard" className="hover:text-[hsl(12,65%,63%)]">{t("Dashboard", "Վահանակ")}</Link>}
+            </div>
+          </div>
+
+          <div>
+            <div className="uppercase-label text-[hsl(32,87%,67%)] mb-3">{t("Find us", "Գտնել մեզ")}</div>
+            <div className="rounded-2xl overflow-hidden border-2 border-white/10 h-40">
+              <iframe
+                title="HOMENETMEN HASK HQ map"
+                width="100%"
+                height="100%"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                src="https://www.openstreetmap.org/export/embed.html?bbox=44.5010%2C40.1780%2C44.5210%2C40.1900&layer=mapnik&marker=40.1840%2C44.5110"
+              />
+            </div>
+            <a
+              href="https://www.openstreetmap.org/?mlat=40.1840&mlon=44.5110#map=17/40.1840/44.5110"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] uppercase tracking-widest text-[hsl(32,87%,67%)] hover:text-[hsl(32,87%,80%)] mt-2 inline-block font-bold"
+            >
+              {t("Open in maps →", "Բացել քարտեզում →")}
+            </a>
+          </div>
+        </div>
+
+        <div className="border-t border-white/10">
+          <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-5 flex flex-col md:flex-row items-center justify-between gap-2 text-[11px] text-white/50">
+            <div>© 2026 HOMENETMEN HASK. {t("All rights reserved.", "Բոլոր իրավունքները պաշտպանված են։")}</div>
+            <div>{t("Founded 1989 · Armenia", "Հիմնադրվել է 1989 · Հայաստան")}</div>
           </div>
         </div>
       </footer>

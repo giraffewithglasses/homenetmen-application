@@ -209,7 +209,15 @@ export default function Members() {
             <div><Label>Email</Label><Input value={form.email || ""} onChange={e => setForm({...form, email: e.target.value})}/></div>
             <div><Label>Phone</Label><Input value={form.phone || ""} onChange={e => setForm({...form, phone: e.target.value})}/></div>
             <div><Label>Date of birth</Label><Input type="date" value={form.dob || ""} onChange={e => setForm({...form, dob: e.target.value})}/></div>
-            <div><Label>Gender</Label><Input value={form.gender || ""} onChange={e => setForm({...form, gender: e.target.value})}/></div>
+            <div><Label>Gender</Label>
+              <Select value={form.gender || ""} onValueChange={v => setForm({...form, gender: v})}>
+                <SelectTrigger data-testid="member-gender"><SelectValue placeholder="Select gender"/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Male">Male</SelectItem>
+                  <SelectItem value="Female">Female</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             {user?.role === "national_admin" && (
               <div><Label>Chapter</Label>
                 <Select value={form.chapter_id || ""} onValueChange={v => setForm({...form, chapter_id: v})}>
@@ -224,7 +232,21 @@ export default function Members() {
                 <SelectContent>{SECTIONS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div><Label>Patrol</Label><Input value={form.patrol || ""} onChange={e => setForm({...form, patrol: e.target.value})}/></div>
+            <div><Label>Patrol</Label>
+              <Select value={form.patrol || ""} onValueChange={v => setForm({...form, patrol: v})}>
+                <SelectTrigger data-testid="member-patrol"><SelectValue placeholder="Select patrol"/></SelectTrigger>
+                <SelectContent>
+                  {(form.section === "Cubs"
+                    ? ["Bear", "Wolf", "Fox", "Owl"]
+                    : form.section === "Scouts"
+                    ? ["Eagle", "Hawk", "Falcon", "Panther", "Lion", "Wolf"]
+                    : form.section === "Senior Scouts"
+                    ? ["Ararat", "Sevan", "Aragats", "Vardavar"]
+                    : ["Masis", "Nairi", "Ashtarak", "Van"]
+                  ).map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>Leadership position</Label>
               <Select value={form.position || "Member"} onValueChange={v => setForm({...form, position: v})}>
                 <SelectTrigger data-testid="mbr-position"><SelectValue/></SelectTrigger>

@@ -50,71 +50,72 @@ export default function MembershipCard() {
 
       <div className="flex justify-center">
         <div
-          className="relative w-[420px] h-[260px] rounded-3xl overflow-hidden text-white shadow-2xl print:shadow-none print:rounded-none"
+          className="relative w-full max-w-[640px] aspect-[1.586/1] rounded-[36px] overflow-hidden text-white shadow-2xl print:shadow-none print:rounded-none"
           style={{
             background: "linear-gradient(135deg, hsl(152 43% 15%) 0%, hsl(149 40% 30%) 55%, hsl(12 65% 55%) 100%)",
           }}
           data-testid="membership-card"
         >
           {/* Decorative rings */}
+          <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full border-2 border-white/10"/>
           <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full border-2 border-white/10"/>
-          <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full border-2 border-white/10"/>
+          <div className="absolute -bottom-32 -left-24 w-64 h-64 rounded-full border-2 border-white/5"/>
 
           {/* Header */}
-          <div className="relative p-5 flex items-start justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-full bg-white/95 p-1 flex items-center justify-center">
+          <div className="relative px-8 pt-7 flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-full bg-white/95 p-1.5 flex items-center justify-center">
                 <img src="/brand/homenetmen-logo.webp" alt="" className="w-full h-full object-contain"/>
               </div>
               <div>
-                <div className="font-display font-black leading-none text-sm">HOMENETMEN HASK</div>
-                <div className="text-[8px] tracking-[0.28em] uppercase opacity-70">Est. 1989 · Scout ID</div>
+                <div className="font-display font-black leading-none text-lg">HOMENETMEN HASK</div>
+                <div className="text-[10px] tracking-[0.3em] uppercase opacity-70 mt-1">Est. 1989 · Official Scout ID</div>
               </div>
             </div>
-            <IdCard size={20} className="opacity-80"/>
+            <IdCard size={28} className="opacity-80"/>
           </div>
 
           {/* Body */}
-          <div className="relative px-5 pb-4 flex items-end justify-between gap-4">
+          <div className="relative px-8 pt-5 pb-6 flex items-end justify-between gap-6 h-[calc(100%-88px)]">
             <div className="flex-1 min-w-0">
-              <div className="text-[9px] uppercase tracking-[0.28em] opacity-70">Member</div>
-              <div className="font-display font-black text-xl leading-tight truncate" data-testid="card-name">{m.full_name}</div>
-              {m.full_name_hy && <div className="text-xs opacity-80 truncate">{m.full_name_hy}</div>}
+              <div className="text-[10px] uppercase tracking-[0.32em] opacity-70">Member</div>
+              <div className="font-display font-black text-3xl leading-tight truncate mt-1" data-testid="card-name">{m.full_name}</div>
+              {m.full_name_hy && <div className="text-sm opacity-80 truncate mt-0.5">{m.full_name_hy}</div>}
 
-              <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
+              <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-xs">
                 <div>
-                  <div className="uppercase tracking-widest opacity-60">Section</div>
-                  <div className="font-semibold">{m.section}</div>
+                  <div className="uppercase tracking-[0.22em] opacity-60 text-[9px]">Section</div>
+                  <div className="font-semibold text-sm mt-0.5">{m.section}</div>
                 </div>
                 <div>
-                  <div className="uppercase tracking-widest opacity-60">Patrol</div>
-                  <div className="font-semibold">{m.patrol || "—"}</div>
+                  <div className="uppercase tracking-[0.22em] opacity-60 text-[9px]">Patrol</div>
+                  <div className="font-semibold text-sm mt-0.5">{m.patrol || "—"}</div>
                 </div>
                 <div className="col-span-2">
-                  <div className="uppercase tracking-widest opacity-60">Chapter</div>
-                  <div className="font-semibold flex items-center gap-1"><MapPin size={9}/> {chapter?.name || m.chapter_id || "—"}</div>
+                  <div className="uppercase tracking-[0.22em] opacity-60 text-[9px]">Chapter</div>
+                  <div className="font-semibold text-sm mt-0.5 flex items-center gap-1"><MapPin size={12}/> {chapter?.name || m.chapter_id || "—"}</div>
                 </div>
                 <div className="col-span-2">
-                  <div className="uppercase tracking-widest opacity-60">Member since</div>
-                  <div className="font-semibold flex items-center gap-1"><Calendar size={9}/> {memberSince}</div>
+                  <div className="uppercase tracking-[0.22em] opacity-60 text-[9px]">Member since</div>
+                  <div className="font-semibold text-sm mt-0.5 flex items-center gap-1"><Calendar size={12}/> {memberSince}</div>
                 </div>
               </div>
             </div>
 
-            <div className="flex-shrink-0 flex flex-col items-center gap-1">
-              <div className="p-1.5 bg-white rounded-lg" data-testid="card-qr">
-                <QRCodeSVG value={verifyUrl} size={82} bgColor="#ffffff" fgColor="#0d3320" level="M"/>
+            <div className="flex-shrink-0 flex flex-col items-center gap-2">
+              <div className="p-2.5 bg-white rounded-2xl shadow-lg" data-testid="card-qr">
+                <QRCodeSVG value={verifyUrl} size={120} bgColor="#ffffff" fgColor="#0d3320" level="M"/>
               </div>
-              <div className="text-[7px] tracking-widest opacity-70 uppercase flex items-center gap-1">
-                <ShieldCheck size={8}/> Scan to verify
+              <div className="text-[9px] tracking-[0.24em] opacity-80 uppercase flex items-center gap-1 font-semibold">
+                <ShieldCheck size={10}/> Scan to verify
               </div>
             </div>
           </div>
 
           {/* Footer strip */}
-          <div className="absolute bottom-0 inset-x-0 h-6 bg-black/25 flex items-center justify-between px-4 text-[9px] tracking-widest uppercase">
-            <span className="opacity-80">ID · {m.member_id.replace(/^mbr_/, "").toUpperCase()}</span>
-            <span className={`px-2 py-0.5 rounded-full font-bold ${m.status === "active" ? "bg-[hsl(149,60%,45%)]" : "bg-[hsl(0,60%,50%)]"}`}>{m.status}</span>
+          <div className="absolute bottom-0 inset-x-0 h-8 bg-black/25 flex items-center justify-between px-6 text-[10px] tracking-[0.24em] uppercase">
+            <span className="opacity-80 font-semibold">ID · {m.member_id.replace(/^mbr_/, "").toUpperCase()}</span>
+            <span className={`px-3 py-0.5 rounded-full font-bold ${m.status === "active" ? "bg-[hsl(149,60%,45%)]" : "bg-[hsl(0,60%,50%)]"}`}>{m.status}</span>
           </div>
         </div>
       </div>
@@ -131,10 +132,10 @@ export default function MembershipCard() {
 
       <style>{`
         @media print {
-          @page { size: 3.5in 2.2in; margin: 0; }
+          @page { size: 5.4in 3.4in; margin: 0; }
           body * { visibility: hidden; }
           [data-testid="membership-card"], [data-testid="membership-card"] * { visibility: visible; }
-          [data-testid="membership-card"] { position: fixed; left: 0; top: 0; }
+          [data-testid="membership-card"] { position: fixed; left: 0; top: 0; width: 5.4in; height: 3.4in; }
         }
       `}</style>
     </div>

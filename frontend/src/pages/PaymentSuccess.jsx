@@ -70,7 +70,7 @@ export default function PaymentSuccess() {
             <CheckCircle2 size={56} className="mx-auto text-[hsl(149,40%,30%)]"/>
             <h1 className="font-display font-black text-3xl mt-4" data-testid="payment-success-title">Payment confirmed</h1>
             <p className="text-sm text-muted-foreground mt-2">
-              You paid {state.record?.currency?.toUpperCase() || "USD"} ${Number(state.record?.amount || 0).toFixed(2)}. Your registration is saved.
+              You paid {state.record?.currency?.toUpperCase() === "AMD" ? "֏" : "$"}{Number(state.record?.amount || 0).toLocaleString()} {state.record?.currency?.toUpperCase() || "AMD"}. Your registration is saved.
             </p>
             <Button
               onClick={() => navigate(state.record?.program_id ? `/programs/${state.record.program_id}` : "/programs")}
