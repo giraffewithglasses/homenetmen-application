@@ -466,6 +466,39 @@ async def public_verify_member(member_id: str):
         "chapter": chapter,
     }
 
+@api.get("/public/homepage-settings")
+async def public_homepage_settings():
+    """Editable homepage config (footer info + section order). Falls back to defaults."""
+    s = await db.homepage_settings.find_one({"key": "singleton"}, {"_id": 0, "key": 0})
+    defaults = {
+        "footer": {
+            "description": "The scouting movement of HOMENETMEN — building character through the outdoors, community, and service.",
+            "description_hy": "ՀՄԸՄ-ի սկաուտական շարժումը՝ բնության, համայնքի և ծառայության միջոցով բնավորության կրթություն։",
+            "hq_address": "Yervand Kochar 17/6\nYerevan, Armenia",
+            "hq_email": "hq@homenetmen-hask.am",
+            "hq_phone": "+374 10 000 000",
+            "latitude": 40.1840,
+            "longitude": 44.5110,
+        },
+        "section_order": ["chapters", "events", "badges", "newsletters", "leaders", "galleries", "resources"],
+    }
+    if not s: return defaults
+    merged = {**defaults, **s}
+    merged["footer"] = {**defaults["footer"], **(s.get("footer") or {})}
+    if not merged.get("section_order"): merged["section_order"] = defaults["section_order"]
+    return merged
+
+class HomepageSettingsIn(BaseModel):
+    footer: dict
+    section_order: List[str]
+
+@api.put("/homepage-settings")
+async def update_homepage_settings(payload: HomepageSettingsIn, user: dict = Depends(require_roles("national_admin"))):
+    doc = {"key": "singleton", "footer": payload.footer, "section_order": payload.section_order, "updated_at": now_iso(), "updated_by": user["email"]}
+    await db.homepage_settings.update_one({"key": "singleton"}, {"$set": doc}, upsert=True)
+    await audit(user, "update", "homepage_settings", "singleton")
+    return {"ok": True}
+
 # ---------- Auth Endpoints ----------
 @api.post("/auth/register")
 async def register(payload: RegisterIn, response: Response):

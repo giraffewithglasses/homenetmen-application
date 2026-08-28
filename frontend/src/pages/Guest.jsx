@@ -27,6 +27,7 @@ export default function Guest() {
   const [leaders, setLeaders] = useState([]);
   const [galleries, setGalleries] = useState([]);
   const [resources, setResources] = useState([]);
+  const [settings, setSettings] = useState(null);
   const [lang, setLang] = useState(() => localStorage.getItem("scout_lang") || "en");
   const [activeLeader, setActiveLeader] = useState(null);
   const [leaderEdit, setLeaderEdit] = useState(false);
@@ -42,7 +43,13 @@ export default function Guest() {
     api.get("/public/leaders").then(r => setLeaders(r.data)).catch(() => {});
     api.get("/public/galleries").then(r => setGalleries(r.data)).catch(() => {});
     api.get("/public/resources").then(r => setResources(r.data)).catch(() => {});
+    api.get("/public/homepage-settings").then(r => setSettings(r.data)).catch(() => {});
   }, []);
+
+  const defaultOrder = ["chapters", "events", "badges", "newsletters", "leaders", "galleries", "resources"];
+  const order = settings?.section_order?.length ? settings.section_order : defaultOrder;
+  const orderIdx = (k) => { const i = order.indexOf(k); return i === -1 ? 999 : i; };
+  const footer = settings?.footer || {};
 
   const setLangPersist = (l) => { setLang(l); localStorage.setItem("scout_lang", l); };
   const t = (en, hy) => (lang === "hy" ? hy : en);
@@ -89,7 +96,7 @@ export default function Guest() {
           className="absolute inset-0"
           style={{
             backgroundImage:
-              "linear-gradient(115deg, hsl(152 43% 15% / 0.92), hsl(149 40% 30% / 0.55)), url('https://images.unsplash.com/photo-1508515053963-70c7cc39dfb5?crop=entropy&cs=srgb&fm=jpg&q=85&w=1920')",
+              "linear-gradient(115deg, hsl(152 43% 15% / 0.88), hsl(149 40% 30% / 0.5)), url('/brand/home-hero.webp')",
             backgroundSize: "cover", backgroundPosition: "center",
           }}
         />
