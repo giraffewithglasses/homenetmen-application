@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { Flame, Compass, Mountain, ChevronRight, CheckCircle2, User, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -133,7 +134,7 @@ export default function Login() {
             <TabsContent value="login">
               <form onSubmit={doLogin} className="space-y-4 mt-6">
                 <div><Label>Email</Label><Input value={email} onChange={(e) => setEmail(e.target.value)} required data-testid="login-email" placeholder="you@scouts.am" /></div>
-                <div><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required data-testid="login-password" /></div>
+                <div><Label>Password</Label><PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required data-testid="login-password" /></div>
                 <Button type="submit" disabled={busy} className="w-full btn-pill h-12 bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" data-testid="login-submit">
                   {busy ? "Signing in…" : (<>Sign in <ChevronRight size={16} className="ml-1" /></>)}
                 </Button>
@@ -151,7 +152,7 @@ export default function Login() {
                     <div><Label>Armenian name</Label><Input value={scoutForm.full_name_hy} onChange={e => setScoutForm({...scoutForm, full_name_hy: e.target.value})}/></div>
                   </div>
                   <div><Label>Email</Label><Input type="email" value={scoutForm.email} onChange={e => setScoutForm({...scoutForm, email: e.target.value})} required data-testid="scout-email"/></div>
-                  <div><Label>Password</Label><Input type="password" value={scoutForm.password} onChange={e => setScoutForm({...scoutForm, password: e.target.value})} required data-testid="scout-password"/></div>
+                  <div><Label>Password</Label><PasswordInput value={scoutForm.password} onChange={e => setScoutForm({...scoutForm, password: e.target.value})} required data-testid="scout-password"/></div>
                   <div className="grid grid-cols-2 gap-3">
                     <div><Label>Date of birth</Label><Input type="date" value={scoutForm.dob} onChange={e => setScoutForm({...scoutForm, dob: e.target.value})} data-testid="scout-dob"/></div>
                     <div><Label>Gender</Label>
@@ -201,7 +202,7 @@ export default function Login() {
                 <form onSubmit={submitLeader} className="space-y-4 mt-6">
                   <div><Label>Full name</Label><Input value={leaderForm.name} onChange={e => setLeaderForm({...leaderForm, name: e.target.value})} required data-testid="leader-name"/></div>
                   <div><Label>Email</Label><Input type="email" value={leaderForm.email} onChange={e => setLeaderForm({...leaderForm, email: e.target.value})} required data-testid="leader-email"/></div>
-                  <div><Label>Password</Label><Input type="password" value={leaderForm.password} onChange={e => setLeaderForm({...leaderForm, password: e.target.value})} required data-testid="leader-password"/></div>
+                  <div><Label>Password</Label><PasswordInput value={leaderForm.password} onChange={e => setLeaderForm({...leaderForm, password: e.target.value})} required data-testid="leader-password"/></div>
                   <div><Label>Gender</Label>
                     <Select value={leaderForm.gender} onValueChange={v => setLeaderForm({...leaderForm, gender: v})}>
                       <SelectTrigger data-testid="leader-gender"><SelectValue placeholder="—"/></SelectTrigger>

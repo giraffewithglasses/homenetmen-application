@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/PasswordInput";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
 import { api, formatApiError } from "@/lib/api";
@@ -120,9 +121,9 @@ export default function Profile() {
           </div>
         </div>
         <form onSubmit={changePassword} className="max-w-md space-y-3 mt-4">
-          <div><Label>Current password</Label><Input type="password" value={current} onChange={e => setCurrent(e.target.value)} required data-testid="pw-current"/></div>
-          <div><Label>New password</Label><Input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} required data-testid="pw-new"/></div>
-          <div><Label>Confirm new password</Label><Input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} required data-testid="pw-confirm"/></div>
+          <div><Label>Current password</Label><PasswordInput value={current} onChange={e => setCurrent(e.target.value)} required data-testid="pw-current"/></div>
+          <div><Label>New password</Label><PasswordInput value={newPw} onChange={e => setNewPw(e.target.value)} required data-testid="pw-new"/></div>
+          <div><Label>Confirm new password</Label><PasswordInput value={confirmPw} onChange={e => setConfirmPw(e.target.value)} required data-testid="pw-confirm"/></div>
           <Button type="submit" disabled={pwBusy} className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" data-testid="pw-submit">
             {pwBusy ? "Updating…" : "Update password"}
           </Button>
