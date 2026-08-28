@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration-4 scoped retest: NEW public resources endpoints, member unarchive + trash members inclusion/scoping, seed idempotency for leader logins, /search archive exclusion (backend: 14/14 pytest passed) and UI verification of Guest header CTA, Guest Resources section + download, Trash Members tab restore flow (frontend: 100% of checked flows passed). No new defects found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter4_public_resources_unarchive.py",
+    "/app/test_reports/pytest/iter4.xml"
+  ],
+  "action_items": [
+    "Optional robustness: Guest.jsx download sets a.href = data.file_data directly. If a resource was stored as raw base64 (no 'data:' prefix) the anchor becomes a relative URL and the download silently produces a broken/HTML file. Normalize to `data:${file_type};base64,...` when the prefix is missing (same applies to the authenticated Resources page).",
+    "Data hygiene (informational): 4 badges are still in Trash from earlier iterations ('Camping', 'Astronomy' seeded badges + 2 junk badges named 'scout'). Restore/purge them from the Trash UI so the public badge catalogue is complete."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1897 lines — beyond the 700-line guideline; split into routers (public, members, resources, admin) for maintainability.",
+    "GET /public/resources returns every non-archived resource (limit 500) with no pagination; fine for now but add limit/skip params before content grows.",
+    "ensure_seed_users_present() uses $setOnInsert only, so an existing seed user whose password was changed is NOT reset. This is intentional-ish (idempotent create) but means ADMIN_PASSWORD rotation will not propagate — document or add a password refresh path.",
+    "unarchive_member relies on _member_chapter_guard; verified 403 cross-chapter and 404 missing. Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter4_public_resources_unarchive.py"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (16/16 assertions)"},
+  "seed_data_creation": "Created and then hard-deleted: TEST_UI Handbook resource (data:text/plain base64), TEST_UI Archived Scout member, plus TEST_* members/badges/chapters/resources created inside pytest (all cleaned up via API + session cleanup fixture). Additionally restored 35 seeded members that earlier iterations had left in status='archived' (Members page previously showed only 1 member).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "/app/memory/test_credentials.md — admin@scouts.am/admin123, ararat.leader@scouts.am/scout123, sevan.leader@scouts.am/scout123, gyumri.leader@scouts.am/scout123 all authenticate (login returns flat user object + access_token at top level, no nested 'user' key).",
+  "context_for_next_testing_agent": "New pytest file /app/backend/tests/test_iter4_public_resources_unarchive.py covers: seed logins (incl. deleting sevan.leader from Mongo and re-running server.ensure_seed_users_present() -> user recreated with $2b$ bcrypt hash and login works), /public/resources list (no auth, no file_data, archived excluded), /public/resources/{rid} (file_data present, 404 archived/missing), member unarchive (national_admin, own-chapter chapter_admin 200, other-chapter 403, 404 missing), /trash members with chapter scoping, /search excluding archived member/badge/chapter. NOTE: DELETE /api/members only soft-archives; DELETE /api/badges and /api/chapters are HARD deletes (archive is POST /archive). Login response: access_token at top level. Chapters were renamed by the product owner (chp_ararat = 'Kentron Chapter', chp_sevan = 'Arabkir', chp_gyumri = 'Ajapnyak'), so do not assert chapter display names. Frontend verified on public URL with localStorage token 'scout_token'.",
+  "rca_of_the_issue": "No product defect reproduced this iteration. Two initial pytest failures were test-authoring bugs on my side (login response is flat, not nested under 'user'; badge/chapter archive uses POST /archive not DELETE) and were fixed in the test file. The 'Members page shows 1 member' observation traced back to iteration-2/3 bulk-archive test pollution, not to this iteration's code; fixed by restoring status='active' on the 35 seeded members via Mongo."
+}

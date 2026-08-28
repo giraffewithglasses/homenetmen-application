@@ -3,7 +3,7 @@ import { NavLink, useNavigate, Link } from "react-router-dom";
 import {
   LayoutDashboard, Newspaper, Mail, Building2, Compass, CalendarDays,
   Award, TrendingUp, Users, ClipboardCheck, Folder, Bell, Settings,
-  UserCircle, LogOut, Menu, X, Flame, Trash2, Home,
+  UserCircle, LogOut, Menu, X, Flame, Trash2, Home, Images,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ const ALL_ITEMS = [
   { to: "/members", label: "Members", labelHy: "Անդամներ", icon: Users, roles: NON_SCOUT },
   { to: "/attendance", label: "Attendance", labelHy: "Հաճախում", icon: ClipboardCheck, roles: NON_SCOUT },
   { to: "/resources", label: "Resources", labelHy: "Ռեսուրսներ", icon: Folder, roles: ALL_ROLES },
+  { to: "/galleries", label: "Galleries", labelHy: "Պատկերասրահ", icon: Images, roles: ALL_ROLES },
   { to: "/notifications", label: "Notifications", labelHy: "Ծանուցումներ", icon: Bell, roles: ALL_ROLES },
   { to: "/administration", label: "Administration", labelHy: "Կառավարում", icon: Settings, roles: LEADER_TIER },
   { to: "/trash", label: "Trash Bin", labelHy: "Աղբարկղ", icon: Trash2, roles: ["national_admin", "chapter_admin"] },
@@ -49,12 +50,12 @@ export default function Sidebar({ mobileOpen, setMobileOpen, lang }) {
         <div className="flex flex-col h-full">
           <div className="flex items-center justify-between px-6 py-6">
             <Link to="/" className="flex items-center gap-3 group" title={lang === "hy" ? "Հիմնական էջ" : "Public homepage"} data-testid="sidebar-logo-home">
-              <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[hsl(12,65%,63%)] text-white shadow-inner border-2 border-[#F4F1EA]/30 group-hover:scale-105 transition-transform">
-                <Flame size={22} strokeWidth={2.2} />
+              <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white/95 shadow-inner border-2 border-[#F4F1EA]/40 group-hover:scale-105 transition-transform overflow-hidden p-1">
+                <img src="/brand/homenetmen-logo.webp" alt="Homenetmen HASK" className="w-full h-full object-contain"/>
               </div>
               <div>
-                <div className="font-display font-black text-lg leading-none flex items-center gap-1.5">SCOUTS <Home size={11} className="opacity-40 group-hover:opacity-90 transition-opacity"/></div>
-                <div className="text-[10px] tracking-[0.28em] uppercase opacity-70">Armenia · Հայաստան</div>
+                <div className="font-display font-black text-base leading-none flex items-center gap-1.5">HOMENETMEN <Home size={11} className="opacity-40 group-hover:opacity-90 transition-opacity"/></div>
+                <div className="text-[10px] tracking-[0.24em] uppercase opacity-70">ՀՄԸՄ-ՀԱՍԿ · EST. 1989</div>
               </div>
             </Link>
             <button className="lg:hidden" onClick={() => setMobileOpen(false)} data-testid="close-sidebar-btn">
@@ -111,7 +112,7 @@ export function MobileTopbar({ setMobileOpen, lang, setLang }) {
       <button onClick={() => setMobileOpen(true)} data-testid="open-sidebar-btn">
         <Menu size={22} />
       </button>
-      <div className="font-display font-black text-sm">SCOUTS</div>
+      <div className="font-display font-black text-sm">HOMENETMEN HASK</div>
       <button
         onClick={() => setLang(lang === "hy" ? "en" : "hy")}
         className="text-xs font-bold uppercase tracking-wider"

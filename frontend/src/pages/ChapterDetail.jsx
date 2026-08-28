@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Building2, MapPin, Users, Mail, Phone, ArrowLeft, Pencil } from "lucide-react";
+import { Building2, MapPin, Users, Mail, Phone, ArrowLeft, Pencil, UserPlus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function ChapterDetail() {
   const { id } = useParams();
@@ -20,6 +21,9 @@ export default function ChapterDetail() {
   const [programs, setPrograms] = useState([]);
   const [editOpen, setEditOpen] = useState(false);
   const [form, setForm] = useState({});
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [promoteMember, setPromoteMember] = useState("");
+  const [promotePosition, setPromotePosition] = useState("Scout Leader");
 
   const load = () => {
     api.get(`/chapters/${id}`).then(r => { setC(r.data); setForm(r.data); });
@@ -29,6 +33,15 @@ export default function ChapterDetail() {
   useEffect(() => { load(); }, [id]);
 
   const canEdit = user?.role === "national_admin" || (user?.role === "chapter_admin" && user?.chapter_id === id);
+
+  const promote = async () => {
+    if (!promoteMember) return toast.error("Choose a member");
+    try {
+      const { data } = await api.post(`/chapters/${id}/promote-member`, { member_id: promoteMember, position: promotePosition });
+      toast.success(`Promoted to ${data.position}${data.linked_user ? " · user role synced" : ""}`);
+      setPromoteOpen(false); setPromoteMember(""); load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
+  };
 
   const save = async () => {
     try {
@@ -81,7 +94,14 @@ export default function ChapterDetail() {
 
       <div className="grid lg:grid-cols-3 gap-4">
         <Card className="clay-card p-6">
-          <h3 className="font-display font-bold text-xl mb-4">Leadership</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-bold text-xl">Leadership</h3>
+            {canEdit && (
+              <Button size="sm" className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)] h-8" onClick={() => setPromoteOpen(true)} data-testid="promote-member-btn">
+                <UserPlus size={14} className="mr-1"/> Add leader
+              </Button>
+            )}
+          </div>
           <div className="space-y-3">
             {(c.leaders || []).map(l => (
               <div key={l.user_id} className="flex items-center gap-3">
@@ -126,6 +146,42 @@ export default function ChapterDetail() {
           ))}
         </div>
       </Card>
+
+      <Dialog open={promoteOpen} onOpenChange={setPromoteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Promote member to leader</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Pick a member from this chapter's roster and assign a leadership role. Their linked user account will be upgraded automatically.</p>
+            <div>
+              <Label>Member</Label>
+              <Select value={promoteMember} onValueChange={setPromoteMember}>
+                <SelectTrigger data-testid="promote-member-select"><SelectValue placeholder="Choose a member"/></SelectTrigger>
+                <SelectContent>
+                  {members.filter(m => m.status !== "archived").map(m => (
+                    <SelectItem key={m.member_id} value={m.member_id}>
+                      {m.full_name} · {m.section} {m.position && m.position !== "Member" ? `(${m.position})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Position</Label>
+              <Select value={promotePosition} onValueChange={setPromotePosition}>
+                <SelectTrigger data-testid="promote-position-select"><SelectValue/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Patrol Co-Leader">Patrol Co-Leader</SelectItem>
+                  <SelectItem value="Patrol Leader">Patrol Leader</SelectItem>
+                  <SelectItem value="Cubs Leader">Cubs Leader</SelectItem>
+                  <SelectItem value="Scout Leader">Scout Leader</SelectItem>
+                  <SelectItem value="Chapter Leader">Chapter Leader</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={promote} className="btn-pill w-full bg-[hsl(149,40%,30%)]" data-testid="promote-submit">Promote</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">

@@ -25,6 +25,7 @@ import Administration from "@/pages/Administration";
 import Profile from "@/pages/Profile";
 import Trash from "@/pages/Trash";
 import CompleteSignup from "@/pages/CompleteSignup";
+import Galleries from "@/pages/Galleries";
 import "@/App.css";
 
 function Router() {
@@ -50,6 +51,7 @@ function Router() {
         <Route path="/my-progress" element={<MyProgress />} />
         <Route path="/attendance" element={<Attendance />} />
         <Route path="/resources" element={<Resources />} />
+        <Route path="/galleries" element={<Galleries />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/administration" element={<Administration />} />
         <Route path="/trash" element={<Trash />} />

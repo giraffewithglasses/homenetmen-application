@@ -1,0 +1,65 @@
+{
+  "summary": "Iteration 3 full-stack verification of the HOMENETMEN HASK platform. Backend: created /app/backend/tests/test_archive_profile_iter3.py (24 new cases) covering archived-exclusion on public endpoints, /api/members archive filters, /chapters/{id} active-leaders filter, PUT /users/{uid}/public-profile national_admin-only authz (403 for chapter_admin / self / scout / anon, 404 for unknown uid), split scout/leader registration + approval materialization, and galleries multi-image upload with /public/galleries 12-image trimming. Full suite now 109/109 PASS. Frontend: verified Guest homepage clickable leader cards -> leader-dialog for anonymous, chapter_admin and national_admin; edit trigger correctly hidden for anonymous and for ALL 6 leader cards when logged in as chapter_admin (including their own card), visible only for national_admin; edited position/bio/phone via leader-form-save and confirmed persistence on the card and in the dialog after a hard reload. Also exercised Members page archive toggle, Trash Bin, Administration users/pending tabs and Galleries page. All 17 requested review items PASS. Found 1 HIGH product gap (archived members are unrecoverable) plus data-integrity and asset issues detailed below.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/members/{id}/unarchive (MISSING) + GET /api/trash", "issue": "DELETE /api/members/{id} soft-archives a member (status='archived'), but there is NO unarchive/restore endpoint for members and GET /api/trash only returns chapters, badges and resources. Archived members are therefore permanently unrecoverable through the API. Reproduced live: all 35 seeded members were sitting in status='archived' (Members page and public stats showed 0 members) and could only be recovered with a direct MongoDB script. Add POST /api/members/{id}/unarchive and include members in /api/trash + a Members tab in Trash.jsx.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "DELETE /api/chapters/{chapter_id}", "issue": "Hard-deletes the chapter document without cascading/reassigning its members. 7 members are still pointing at the deleted chapter 'chp_tavush', so the Members table renders the raw id 'chp_tavush' in the Chapter column. Either block delete when members exist or archive instead of delete."},
+      {"endpoint": "GET /api/search", "issue": "Does not exclude archived items — archived chapters/badges/members are still returned by global search, which contradicts requirement 3 ('archived items must not appear in default lists')."},
+      {"endpoint": "seed() at server.py:1555", "issue": "Non-idempotent (early-returns when any national_admin exists). All three seeded leader accounts (ararat.leader / sevan.leader / gyumri.leader) were missing from the users collection again this iteration, so every leader login returned 401 until they were re-created by a script. Make seed() upsert each documented account so /app/memory/test_credentials.md stays valid."},
+      {"endpoint": "GET /api/galleries", "issue": "No role/chapter scoping — any authenticated user (including scout) receives every gallery from every chapter, while POST/DELETE are leader-scoped. Inconsistent authorization."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Guest.jsx galleries section / Galleries.jsx", "issue": "Broken image rendered on the PUBLIC homepage and on /galleries: gallery 'Summer Camp 2026' has cover = 'data:image/png;base64,AAA=' (invalid base64) and 0 images, so the browser shows the broken-image glyph. Add an onError fallback/placeholder for gallery covers and validate uploaded base64 on the server.", "selector": "img[src^='data:image/png;base64,AAA=']", "priority": "MEDIUM"},
+      {"component": "Trash.jsx", "issue": "Trash Bin only exposes tabs Chapters / Badges / Resources. No Members tab, so archived members cannot be restored from the UI (matches the backend gap above).", "selector": "/trash tab list", "priority": "HIGH"},
+      {"component": "Guest.jsx header", "issue": "Header always renders the 'Sign in' CTA (data-testid=guest-signin-btn) even when the visitor is authenticated (verified as national_admin). Should switch to 'Dashboard'/account menu when user is present.", "selector": "[data-testid=\"guest-signin-btn\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Guest leader dialog", "issues": ["Radix DialogContent is missing a Description / aria-describedby — logs 'Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}' on every open (a11y)."]},
+      {"screen": "Members page", "issues": ["Chapter column falls back to the raw chapter_id (e.g. 'chp_tavush') when the chapter no longer exists — show 'Unassigned' instead."]},
+      {"screen": "Dashboard", "issues": ["Pre-existing Recharts 'width(-1) height(-1)' console warning on first render (cosmetic)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_archive_profile_iter3.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iter3_all.xml"
+  ],
+  "action_items": [
+    "HIGH: Add POST /api/members/{id}/unarchive, include archived members in GET /api/trash, and add a Members tab with Restore in Trash.jsx — archived members are currently unrecoverable.",
+    "MEDIUM: Guard/cascade DELETE /api/chapters/{id} so members are not orphaned; display 'Unassigned' instead of a raw chapter_id in Members.jsx.",
+    "MEDIUM: Add an onError placeholder for gallery cover images and validate base64 payloads on POST /galleries and /galleries/{gid}/images (an invalid cover currently shows a broken image on the public homepage).",
+    "MEDIUM: Make seed() idempotent (upsert each documented seed account) — the three seeded leader logins vanished from the DB again and broke all leader auth.",
+    "LOW: Exclude archived documents from GET /api/search.",
+    "LOW: Show a Dashboard/account CTA instead of 'Sign in' in the Guest header when a user is authenticated.",
+    "LOW: Add DialogDescription/aria-describedby to the leader dialog; scope GET /api/galleries by role/chapter."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1845 lines — well past the 700-line threshold; split into routers (auth, chapters, members, badges, programs, galleries, admin).",
+    "Archive semantics are inconsistent: chapters/badges/resources use an `archived: true` boolean while users/members overload `status: 'archived'`. Only the boolean-based entities got unarchive endpoints and Trash coverage, which is exactly why members became unrecoverable. Unify on one convention.",
+    "DELETE /api/members/{id} performs an archive, not a delete — misleading verb/semantics for API consumers; consider POST /members/{id}/archive.",
+    "PUT /users/{uid}/public-profile correctly uses require_roles('national_admin') and returns a projection without password_hash/_id — verified 403 for chapter_admin, self and scout, 401/403 for anonymous, 404 for unknown uid.",
+    "approve_user inserts `prof` (a dict lifted from the target user document) via insert_one; the response is {'ok': True} so no ObjectId leaks today, but the same mutate-then-return risk from iteration 1 applies if this ever returns the doc.",
+    "GET /api/galleries ignores the caller's role/chapter while POST/DELETE enforce it — tighten for consistency."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_archive_profile_iter3.py (created — 24 cases)",
+    "/app/backend/tests/backend_test.py (fixed stale TestSearch::test_search_ararat which hardcoded a chapter name the owner has since renamed; it now derives the query from live data)",
+    "/app/backend/tests/_restore_seed_members.py (created — data restore helper)",
+    "/app/backend/tests/_cleanup_test_artifacts.py (created — TEST_ artifact cleanup)"
+  ],
+  "success_rate": {"backend": "100% (109/109 pytest cases, incl. 24 new iteration-3 cases)", "frontend": "100% of requested leader-dialog / authz flows pass; 3 unrelated UI issues found"},
+  "seed_data_creation": "Restored 3 missing seeded leader users (ararat.leader/sevan.leader/gyumri.leader @scouts.am, password scout123) via tests/_restore_seed_users.py. Restored 33 seeded members from status='archived' back to 'active' via tests/_restore_seed_members.py. Removed leftover TEST_ artifacts from earlier iterations (6 TEST_Newsletter records that were showing on the public homepage, TEST_ members/users). All transient objects created by the new test file (chapters, badges, members, users, galleries) are cleaned up in-test.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin@scouts.am/admin123 (national_admin), ararat.leader@scouts.am/scout123 (chapter_admin, chp_ararat=Kentron Chapter), sevan.leader@scouts.am/scout123 (chapter_leader, chp_sevan=Arabkir Chapter), narek@scouts.am/scout123 (scout) — all 4 verified working after the seed-user restore.",
+  "context_for_next_testing_agent": "Run `python /app/backend/tests/_inspect.py` FIRST: seed() is non-idempotent, so the three seeded leader logins disappear from the users collection between iterations; re-run tests/_restore_seed_users.py if they are missing, otherwise every leader/chapter_admin test fails with 401. Also check `db.members` statuses — DELETE /api/members/{id} archives and there is no restore path, so bulk-archiving in the UI silently empties the whole Members page and the public member count (tests/_restore_seed_members.py fixes it). Chapter display names were renamed by the owner (chp_ararat='Kentron Chapter', chp_sevan='Arabkir Chapter', chp_gyumri='Ajapnyak Chapter'); never hardcode chapter names in assertions. Frontend selectors verified: guest leader cards `button[data-testid^=\"leader-usr\"]`, dialog `[data-testid=\"leader-dialog\"]`, edit trigger `[data-testid=\"leader-edit-btn\"]`, form fields leader-form-name/position/phone/bio/picture, save `[data-testid=\"leader-form-save\"]`. Login page uses login-email/login-password/login-submit and redirects to /dashboard. Run tests/_cleanup_test_artifacts.py after a session to keep the public homepage clean.",
+  "flaky_tests": [
+    {"test": "test_archive_profile_iter3.py::test_chapter_detail_leaders_all_active", "issue": "Raced with TestPublicLeaders::test_archived_leader_excluded under xdist (~50% on the first full run) because both touch the same chapter's leader list. Fixed in the test by skipping transient test_* users; 109/109 green on re-run."}
+  ],
+  "rca_of_the_issue": "1) Archived members unrecoverable: the archive system was implemented twice with different shapes — chapters/badges/resources use `archived: true` and each got an /unarchive endpoint plus a /api/trash bucket, while users and members instead overload `status`. Users got POST /users/{uid}/unarchive (surfaced via Administration's SHOW ARCHIVED toggle) but members got neither an unarchive route nor a /api/trash bucket nor a Trash.jsx tab, so DELETE /api/members/{id} is a one-way door. Repro: DELETE /api/members/{id} then GET /api/trash -> member absent, and no route exists to reset status. 2) Leader logins 401: seed() returns early whenever a national_admin exists, so any seeded account removed from the DB is never recreated; the three leader accounts were absent again this iteration. Mitigation applied: direct-DB restore scripts under /app/backend/tests/. 3) Broken public image: an invalid base64 cover ('data:image/png;base64,AAA=') was accepted by POST /api/galleries and there is no onError fallback on the <img>, so the broken-image glyph renders on the guest landing page."
+}

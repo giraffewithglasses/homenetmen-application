@@ -3,13 +3,13 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Award, FileText, RotateCcw, Trash2 } from "lucide-react";
+import { Building2, Award, FileText, RotateCcw, Trash2, Users } from "lucide-react";
 import BadgePatch from "@/components/BadgePatch";
 import { toast } from "sonner";
 
 export default function Trash() {
-  const [data, setData] = useState({ chapters: [], badges: [], resources: [] });
-  const load = () => api.get("/trash").then(r => setData(r.data)).catch(() => {});
+  const [data, setData] = useState({ chapters: [], badges: [], resources: [], members: [] });
+  const load = () => api.get("/trash").then(r => setData({ chapters: [], badges: [], resources: [], members: [], ...r.data })).catch(() => {});
   useEffect(() => { load(); }, []);
 
   const restore = async (kind, id) => {
@@ -26,7 +26,7 @@ export default function Trash() {
     } catch { toast.error("Failed"); }
   };
 
-  const total = data.chapters.length + data.badges.length + data.resources.length;
+  const total = data.chapters.length + data.badges.length + data.resources.length + data.members.length;
 
   return (
     <div className="space-y-6">
@@ -44,6 +44,7 @@ export default function Trash() {
           <TabsTrigger value="chapters" className="rounded-full" data-testid="trash-tab-chapters">Chapters ({data.chapters.length})</TabsTrigger>
           <TabsTrigger value="badges" className="rounded-full" data-testid="trash-tab-badges">Badges ({data.badges.length})</TabsTrigger>
           <TabsTrigger value="resources" className="rounded-full" data-testid="trash-tab-resources">Resources ({data.resources.length})</TabsTrigger>
+          <TabsTrigger value="members" className="rounded-full" data-testid="trash-tab-members">Members ({data.members.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="chapters">
@@ -104,6 +105,29 @@ export default function Trash() {
               </Card>
             ))}
             {!data.resources.length && <div className="col-span-full text-sm text-muted-foreground text-center py-8">No archived resources.</div>}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="members">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+            {data.members.map(m => (
+              <Card key={m.member_id} className="clay-card p-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[hsl(12,65%,63%)]/20 text-[hsl(12,65%,63%)] flex items-center justify-center font-display font-black">
+                    {m.full_name?.[0] || <Users size={20}/>}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-display font-bold text-sm truncate">{m.full_name}</div>
+                    <div className="text-xs text-muted-foreground truncate">{m.section} · {m.patrol || "—"}</div>
+                    {m.email && <div className="text-[10px] text-muted-foreground truncate">{m.email}</div>}
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Button size="sm" variant="outline" className="btn-pill flex-1" onClick={() => restore("members", m.member_id)} data-testid={`trash-restore-mbr-${m.member_id}`}><RotateCcw size={12} className="mr-1"/>Restore</Button>
+                </div>
+              </Card>
+            ))}
+            {!data.members.length && <div className="col-span-full text-sm text-muted-foreground text-center py-8">No archived members.</div>}
           </div>
         </TabsContent>
       </Tabs>

@@ -5,18 +5,33 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import BadgePatch from "@/components/BadgePatch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 import {
   Flame, Users, Building2, Award, Compass, CalendarDays, MapPin, Clock,
   Mail, ChevronRight, Mountain, Tent, Heart, ArrowRight, Sparkles, Megaphone,
+  Phone, Pencil, FileText, Download,
 } from "lucide-react";
 
 export default function Guest() {
+  const { user } = useAuth();
   const [overview, setOverview] = useState(null);
   const [badges, setBadges] = useState([]);
   const [newsletters, setNewsletters] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [leaders, setLeaders] = useState([]);
+  const [galleries, setGalleries] = useState([]);
+  const [resources, setResources] = useState([]);
   const [lang, setLang] = useState(() => localStorage.getItem("scout_lang") || "en");
+  const [activeLeader, setActiveLeader] = useState(null);
+  const [leaderEdit, setLeaderEdit] = useState(false);
+  const [leaderForm, setLeaderForm] = useState({});
+  const [savingLeader, setSavingLeader] = useState(false);
 
   useEffect(() => {
     api.get("/public/overview").then(r => setOverview(r.data)).catch(() => {});
@@ -24,6 +39,9 @@ export default function Guest() {
     api.get("/public/newsletters").then(r => setNewsletters(r.data)).catch(() => {});
     api.get("/public/programs/upcoming").then(r => setUpcoming(r.data)).catch(() => {});
     api.get("/public/announcements").then(r => setAnnouncements(r.data)).catch(() => {});
+    api.get("/public/leaders").then(r => setLeaders(r.data)).catch(() => {});
+    api.get("/public/galleries").then(r => setGalleries(r.data)).catch(() => {});
+    api.get("/public/resources").then(r => setResources(r.data)).catch(() => {});
   }, []);
 
   const setLangPersist = (l) => { setLang(l); localStorage.setItem("scout_lang", l); };
@@ -35,12 +53,12 @@ export default function Guest() {
       <header className="sticky top-0 z-40 bg-[hsl(42,30%,94%)]/85 backdrop-blur border-b border-border">
         <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[hsl(12,65%,63%)] text-white border-2 border-white shadow-inner">
-              <Flame size={18}/>
+            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-white shadow-inner border-2 border-border p-1">
+              <img src="/brand/homenetmen-logo.webp" alt="HASK" className="w-full h-full object-contain"/>
             </div>
             <div>
-              <div className="font-display font-black text-base leading-none">SCOUTS OF ARMENIA</div>
-              <div className="text-[9px] tracking-[0.3em] uppercase text-muted-foreground">Հայաստանի սկաուտներ · Est. 1918</div>
+              <div className="font-display font-black text-base leading-none">HOMENETMEN HASK</div>
+              <div className="text-[9px] tracking-[0.24em] uppercase text-muted-foreground">ՀՄԸՄ-ՀԱՍԿ · Est. 1989</div>
             </div>
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-semibold">
@@ -48,6 +66,7 @@ export default function Guest() {
             <a href="#badges" className="hover:text-[hsl(12,65%,63%)]">{t("Badges", "Կրծքանշաններ")}</a>
             <a href="#events" className="hover:text-[hsl(12,65%,63%)]">{t("Events", "Ծրագրեր")}</a>
             <a href="#newsletters" className="hover:text-[hsl(12,65%,63%)]">{t("News", "Նորություններ")}</a>
+            <a href="#resources" className="hover:text-[hsl(12,65%,63%)]">{t("Resources", "Ձեռնարկներ")}</a>
           </nav>
           <div className="flex items-center gap-2">
             <button
@@ -55,9 +74,9 @@ export default function Guest() {
               className="px-3 py-1.5 rounded-full border border-border bg-white/60 hover:bg-white text-[11px] font-bold uppercase tracking-widest"
               data-testid="guest-lang-toggle"
             >{lang === "hy" ? "EN" : "ՀԱՅ"}</button>
-            <Link to="/login">
+            <Link to={user ? "/dashboard" : "/login"}>
               <Button className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)] h-9" data-testid="guest-signin-btn">
-                {t("Sign in", "Մուտք")}
+                {user ? t("Dashboard", "Վահանակ") : t("Sign in", "Մուտք")}
               </Button>
             </Link>
           </div>
@@ -313,6 +332,223 @@ export default function Guest() {
         </div>
       </section>
 
+      {/* Leaders */}
+      <section id="leaders" className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20">
+        <div className="mb-6">
+          <div className="uppercase-label">{t("Meet the team", "Ղեկավարներ")}</div>
+          <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
+            {t("Our leaders", "Մեր ղեկավարները")}
+          </h2>
+          <p className="text-muted-foreground mt-2 max-w-2xl">
+            {t("The volunteers who guide every patrol, run every camp, and champion every scout.", "Կամավորները, ովքեր առաջնորդում են ամեն ջոկատ, ամեն ճամբար, ամեն սկաուտ։")}
+          </p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {leaders.map(l => (
+            <button
+              key={l.user_id}
+              type="button"
+              onClick={() => { setActiveLeader(l); setLeaderEdit(false); setLeaderForm({ name: l.name || "", position_title: l.position_title || "", bio: l.bio || "", phone: l.phone || "", picture: l.picture || "" }); }}
+              className="text-center group focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(12,65%,63%)] rounded-2xl p-2 hover:bg-white/50 transition"
+              data-testid={`leader-${l.user_id}`}
+            >
+              <div className="w-24 h-24 mx-auto rounded-full border-4 border-[hsl(12,65%,63%)]/40 group-hover:border-[hsl(12,65%,63%)] bg-[hsl(149,40%,30%)] text-white flex items-center justify-center font-display font-black text-3xl overflow-hidden transition">
+                {l.picture ? <img src={l.picture} alt="" className="w-full h-full object-cover"/> : l.name?.[0]}
+              </div>
+              <div className="font-semibold text-sm mt-3">{l.name}</div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-0.5">{l.position_title || (l.role || "").replace(/_/g, " ")}</div>
+              {l.chapter_name && <div className="text-xs text-[hsl(12,65%,63%)] font-semibold mt-0.5">{l.chapter_name}</div>}
+            </button>
+          ))}
+          {!leaders.length && <div className="col-span-full text-center text-muted-foreground">{t("Leaders roster coming soon.", "Ղեկավարների ցանկը շուտով։")}</div>}
+        </div>
+      </section>
+
+      {/* Leader profile dialog */}
+      <Dialog open={!!activeLeader} onOpenChange={(o) => { if (!o) { setActiveLeader(null); setLeaderEdit(false); } }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="leader-dialog">
+          <DialogHeader>
+            <DialogTitle>{leaderEdit ? t("Edit leader profile", "Խմբագրել ղեկավարի պրոֆիլը") : (activeLeader?.name || "")}</DialogTitle>
+          </DialogHeader>
+
+          {activeLeader && !leaderEdit && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-full border-4 border-[hsl(12,65%,63%)]/40 bg-[hsl(149,40%,30%)] text-white flex items-center justify-center font-display font-black text-2xl overflow-hidden">
+                  {activeLeader.picture ? <img src={activeLeader.picture} alt="" className="w-full h-full object-cover"/> : activeLeader.name?.[0]}
+                </div>
+                <div>
+                  <div className="font-display font-bold text-lg">{activeLeader.name}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{activeLeader.position_title || (activeLeader.role || "").replace(/_/g, " ")}</div>
+                  {activeLeader.chapter_name && <div className="text-xs text-[hsl(12,65%,63%)] font-semibold mt-0.5">{activeLeader.chapter_name}</div>}
+                </div>
+              </div>
+              {activeLeader.bio && <p className="text-sm text-muted-foreground whitespace-pre-line">{activeLeader.bio}</p>}
+              <div className="space-y-1 text-sm">
+                {activeLeader.email && <div className="flex items-center gap-2"><Mail size={14} className="text-muted-foreground"/> {activeLeader.email}</div>}
+                {activeLeader.phone && <div className="flex items-center gap-2"><Phone size={14} className="text-muted-foreground"/> {activeLeader.phone}</div>}
+              </div>
+              {user?.role === "national_admin" && (
+                <Button onClick={() => setLeaderEdit(true)} className="btn-pill w-full bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" data-testid="leader-edit-btn">
+                  <Pencil size={14} className="mr-2"/> {t("Edit profile", "Խմբագրել")}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {activeLeader && leaderEdit && (
+            <div className="space-y-3">
+              <div>
+                <Label>{t("Name", "Անուն")}</Label>
+                <Input value={leaderForm.name} onChange={e => setLeaderForm({ ...leaderForm, name: e.target.value })} data-testid="leader-form-name"/>
+              </div>
+              <div>
+                <Label>{t("Position", "Պաշտոն")}</Label>
+                <Input value={leaderForm.position_title} onChange={e => setLeaderForm({ ...leaderForm, position_title: e.target.value })} placeholder="e.g. Scout Leader" data-testid="leader-form-position"/>
+              </div>
+              <div>
+                <Label>{t("Phone", "Հեռախոս")}</Label>
+                <Input value={leaderForm.phone} onChange={e => setLeaderForm({ ...leaderForm, phone: e.target.value })} data-testid="leader-form-phone"/>
+              </div>
+              <div>
+                <Label>{t("About", "Մասին")}</Label>
+                <Textarea rows={4} value={leaderForm.bio} onChange={e => setLeaderForm({ ...leaderForm, bio: e.target.value })} data-testid="leader-form-bio"/>
+              </div>
+              <div>
+                <Label>{t("Profile picture", "Լուսանկար")}</Label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="block w-full text-sm mt-1"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const r = new FileReader();
+                    r.onload = () => setLeaderForm({ ...leaderForm, picture: r.result });
+                    r.readAsDataURL(f);
+                  }}
+                  data-testid="leader-form-picture"
+                />
+                {leaderForm.picture && <img src={leaderForm.picture} alt="" className="mt-2 w-20 h-20 rounded-full object-cover"/>}
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="btn-pill flex-1" onClick={() => setLeaderEdit(false)}>{t("Cancel", "Չեղարկել")}</Button>
+                <Button
+                  disabled={savingLeader}
+                  onClick={async () => {
+                    setSavingLeader(true);
+                    try {
+                      const payload = {
+                        name: leaderForm.name,
+                        position_title: leaderForm.position_title,
+                        phone: leaderForm.phone,
+                        bio: leaderForm.bio,
+                        picture: leaderForm.picture,
+                      };
+                      const { data: updated } = await api.put(`/users/${activeLeader.user_id}/public-profile`, payload);
+                      toast.success(t("Profile updated", "Պրոֆիլը թարմացվեց"));
+                      // refresh list
+                      const { data: fresh } = await api.get("/public/leaders");
+                      setLeaders(fresh);
+                      const refreshed = fresh.find(x => x.user_id === activeLeader.user_id) || { ...activeLeader, ...updated };
+                      setActiveLeader(refreshed);
+                      setLeaderEdit(false);
+                    } catch (err) {
+                      toast.error(err.response?.data?.detail || t("Update failed", "Չհաջողվեց թարմացնել"));
+                    } finally {
+                      setSavingLeader(false);
+                    }
+                  }}
+                  className="btn-pill flex-1 bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]"
+                  data-testid="leader-form-save"
+                >
+                  {t("Save", "Պահպանել")}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Galleries */}
+      {galleries.length > 0 && (
+        <section id="galleries" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20">
+          <div className="mb-6">
+            <div className="uppercase-label">{t("Snapshots", "Պահեր")}</div>
+            <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
+              {t("From the field", "Դաշտից")}
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {galleries.slice(0, 6).map(g => (
+              <Card key={g.gallery_id} className="clay-card overflow-hidden hover-lift" data-testid={`guest-gallery-${g.gallery_id}`}>
+                <div className="h-52 relative bg-muted">
+                  {g.cover
+                    ? <img src={g.cover} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
+                    : (g.images?.[0]?.data ? <img src={g.images[0].data} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }}/> : null)}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"/>
+                  <div className="absolute bottom-3 left-4 right-4 text-white">
+                    <div className="font-display font-bold">{g.title}</div>
+                    <div className="text-xs opacity-80">{g.images?.length || 0} photos</div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Resources */}
+      {resources.length > 0 && (
+        <section id="resources" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20">
+          <div className="mb-6">
+            <div className="uppercase-label">{t("Downloads", "Ներբեռնումներ")}</div>
+            <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
+              {t("Resources & manuals", "Ձեռնարկներ և նյութեր")}
+            </h2>
+            <p className="text-muted-foreground mt-2 max-w-2xl">
+              {t("Handbooks, forms, and guides — open to scouts, parents, and the curious.", "Ձեռնարկներ, ձևաթղթեր և ուղեցույցներ՝ բաց սկաուտների, ծնողների և բոլորի համար։")}
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {resources.slice(0, 9).map(r => (
+              <Card key={r.resource_id} className="clay-card p-5 hover-lift" data-testid={`guest-resource-${r.resource_id}`}>
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-[hsl(149,40%,30%)] text-white flex items-center justify-center flex-shrink-0">
+                    <FileText size={18}/>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <Badge className="rounded-full bg-[hsl(32,87%,67%)] text-[hsl(155,60%,8%)] text-[10px]">{r.category || "Manuals"}</Badge>
+                    <div className="font-display font-bold text-base mt-2 truncate">{r.title}</div>
+                    {r.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.description}</p>}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const { data } = await api.get(`/public/resources/${r.resource_id}`);
+                          if (!data?.file_data) return;
+                          const href = data.file_data.startsWith("data:")
+                            ? data.file_data
+                            : `data:${data.file_type || "application/octet-stream"};base64,${data.file_data}`;
+                          const a = document.createElement("a");
+                          a.href = href;
+                          a.download = data.file_name || `${r.title || "resource"}`;
+                          document.body.appendChild(a); a.click(); a.remove();
+                        } catch {}
+                      }}
+                      className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-[hsl(12,65%,63%)] hover:text-[hsl(12,70%,55%)]"
+                      data-testid={`guest-resource-dl-${r.resource_id}`}
+                    >
+                      <Download size={12}/> {t("Download", "Ներբեռնել")}
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* CTA */}
       <section className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20">
         <Card className="clay-card p-10 md:p-14 relative overflow-hidden text-white" style={{ border: "none", background: "linear-gradient(120deg, hsl(12 65% 55%), hsl(32 87% 60%))" }}>
@@ -344,12 +580,12 @@ export default function Guest() {
       <footer className="border-t border-border">
         <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-10 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center bg-[hsl(12,65%,63%)] text-white">
-              <Flame size={16}/>
+            <div className="w-11 h-11 rounded-full flex items-center justify-center bg-white shadow-inner border-2 border-border p-1">
+              <img src="/brand/homenetmen-logo.webp" alt="HASK" className="w-full h-full object-contain"/>
             </div>
             <div>
-              <div className="font-display font-black text-sm">SCOUTS OF ARMENIA</div>
-              <div className="text-[10px] tracking-[0.28em] uppercase text-muted-foreground">© 2026 · Founded 1918</div>
+              <div className="font-display font-black text-sm">HOMENETMEN HASK</div>
+              <div className="text-[10px] tracking-[0.24em] uppercase text-muted-foreground">© 2026 · Founded 1989</div>
             </div>
           </div>
           <div className="text-xs text-muted-foreground">

@@ -94,10 +94,12 @@ export default function Login() {
         <div className="absolute inset-0" style={{ background: "linear-gradient(115deg, hsl(152 43% 15% / 0.85), hsl(152 43% 15% / 0.35))" }} />
         <div className="relative z-10 h-full flex flex-col justify-between p-14 text-white">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center bg-[hsl(12,65%,63%)] shadow-inner border-2 border-white/30"><Flame size={22} /></div>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-white/95 shadow-inner border-2 border-white/40 p-1.5">
+              <img src="/brand/homenetmen-logo.webp" alt="HASK" className="w-full h-full object-contain"/>
+            </div>
             <div>
-              <div className="font-display font-black text-xl leading-none">SCOUTS OF ARMENIA</div>
-              <div className="text-[10px] tracking-[0.35em] uppercase opacity-70">Հայաստանի սկաուտներ</div>
+              <div className="font-display font-black text-xl leading-none">HOMENETMEN HASK</div>
+              <div className="text-[10px] tracking-[0.3em] uppercase opacity-70">ՀՄԸՄ-ՀԱՍԿ · Est. 1989</div>
             </div>
           </div>
           <div>
@@ -111,7 +113,7 @@ export default function Login() {
               <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur"><Flame size={14} /> Camp Craft</span>
             </div>
           </div>
-          <div className="text-xs opacity-70">© 2026 · Founded 1918</div>
+          <div className="text-xs opacity-70">© 2026 · Founded 1989</div>
         </div>
       </div>
 

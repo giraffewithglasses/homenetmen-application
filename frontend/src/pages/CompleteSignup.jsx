@@ -63,7 +63,7 @@ export default function CompleteSignup() {
     <div className="min-h-screen p-4 lg:p-10 flex items-center justify-center">
       <Card className="clay-card w-full max-w-2xl p-8 lg:p-10">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-full bg-[hsl(12,65%,63%)] text-white flex items-center justify-center"><Flame size={20}/></div>
+          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white shadow-inner border-2 border-border p-1"><img src="/brand/homenetmen-logo.webp" alt="HASK" className="w-full h-full object-contain"/></div>
           <div>
             <div className="uppercase-label">Almost there</div>
             <h1 className="font-display text-3xl font-black">Complete your signup</h1>

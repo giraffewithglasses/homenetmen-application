@@ -163,6 +163,17 @@ def clean(d: dict) -> dict:
     return d
 
 # ---------- Models ----------
+class GalleryIn(BaseModel):
+    title: str
+    description: str = ""
+    cover: str = ""
+    chapter_id: Optional[str] = None
+    images: List[dict] = []  # [{data: base64, caption: str}]
+
+class PromoteMemberIn(BaseModel):
+    member_id: str
+    position: str  # e.g. "Scout Leader", "Cubs Leader", "Chapter Leader"
+
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str
@@ -293,18 +304,44 @@ class RequirementUpdate(BaseModel):
     completed: bool
 
 # ---------- Public (Guest) Endpoints ----------
+@api.get("/public/leaders")
+async def public_leaders():
+    q = {"role": {"$in": ["national_admin"] + list(LEADER_ROLES)}, "status": "active"}
+    items = await db.users.find(q, {"_id": 0, "user_id": 1, "name": 1, "role": 1, "picture": 1, "chapter_id": 1, "bio": 1, "phone": 1, "position_title": 1, "email": 1}).sort("role", 1).to_list(200)
+    chapters = {c["chapter_id"]: c["name"] for c in await db.chapters.find({}, {"chapter_id": 1, "name": 1}).to_list(200)}
+    for it in items:
+        it["chapter_name"] = chapters.get(it.get("chapter_id"), "")
+    return items
+
+@api.get("/public/leaders/{uid}")
+async def public_leader(uid: str):
+    u = await db.users.find_one({"user_id": uid, "status": "active"}, {"_id": 0, "user_id": 1, "name": 1, "role": 1, "picture": 1, "chapter_id": 1, "bio": 1, "phone": 1, "position_title": 1, "email": 1})
+    if not u: raise HTTPException(404, "Not found")
+    if u.get("chapter_id"):
+        c = await db.chapters.find_one({"chapter_id": u["chapter_id"]}, {"name": 1})
+        u["chapter_name"] = c["name"] if c else ""
+    return u
+
+@api.get("/public/galleries")
+async def public_galleries():
+    items = await db.galleries.find({}, {"_id": 0}).sort("created_at", -1).limit(30).to_list(30)
+    for g in items:
+        # trim payload: only keep first 12 image thumbs
+        g["images"] = (g.get("images") or [])[:12]
+    return items
+
 @api.get("/public/overview")
 async def public_overview():
     """Public snapshot for the guest / landing page — safe, non-sensitive info only."""
     chapters = await db.chapters.find(
-        {}, {"_id": 0, "chapter_id": 1, "name": 1, "name_hy": 1, "location": 1, "description": 1}
+        {"archived": {"$ne": True}}, {"_id": 0, "chapter_id": 1, "name": 1, "name_hy": 1, "location": 1, "description": 1}
     ).to_list(50)
     for c in chapters:
         c["member_count"] = await db.members.count_documents(
             {"chapter_id": c["chapter_id"], "status": {"$ne": "archived"}}
         )
     total_members = await db.members.count_documents({"status": {"$ne": "archived"}})
-    total_badges = await db.badges.count_documents({})
+    total_badges = await db.badges.count_documents({"archived": {"$ne": True}})
     total_programs = await db.programs.count_documents({})
     total_awarded = await db.member_badges.count_documents({"awarded": True})
     return {
@@ -320,7 +357,7 @@ async def public_overview():
 
 @api.get("/public/badges")
 async def public_badges():
-    return await db.badges.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+    return await db.badges.find({"archived": {"$ne": True}}, {"_id": 0}).sort("name", 1).to_list(500)
 
 @api.get("/public/newsletters")
 async def public_newsletters():
@@ -345,6 +382,19 @@ async def public_announcements():
         {"chapter_id": None}, {"_id": 0}
     ).sort("created_at", -1).limit(10).to_list(10)
     return items
+
+@api.get("/public/resources")
+async def public_resources(category: Optional[str] = None):
+    q = {"archived": {"$ne": True}}
+    if category: q["category"] = category
+    # omit large base64 blob in listing
+    return await db.resources.find(q, {"_id": 0, "file_data": 0}).sort("created_at", -1).to_list(500)
+
+@api.get("/public/resources/{rid}")
+async def public_resource_download(rid: str):
+    r = await db.resources.find_one({"resource_id": rid, "archived": {"$ne": True}}, {"_id": 0})
+    if not r: raise HTTPException(404, "Not found")
+    return r
 
 # ---------- Auth Endpoints ----------
 @api.post("/auth/register")
@@ -568,7 +618,7 @@ async def get_chapter(chapter_id: str):
     c = await db.chapters.find_one({"chapter_id": chapter_id}, {"_id": 0})
     if not c: raise HTTPException(404, "Chapter not found")
     c["member_count"] = await db.members.count_documents({"chapter_id": chapter_id, "status": {"$ne": "archived"}})
-    c["leaders"] = await db.users.find({"chapter_id": chapter_id, "role": {"$in": ["chapter_admin", "chapter_leader"]}}, {"_id": 0, "password_hash": 0}).to_list(50)
+    c["leaders"] = await db.users.find({"chapter_id": chapter_id, "role": {"$in": ["chapter_admin", "chapter_leader"]}, "status": "active"}, {"_id": 0, "password_hash": 0}).to_list(50)
     return c
 
 @api.post("/chapters")
@@ -615,7 +665,7 @@ def _member_chapter_guard(user: dict, chapter_id: str):
     raise HTTPException(403, "Not allowed for this chapter")
 
 @api.get("/members")
-async def list_members(chapter_id: Optional[str] = None, section: Optional[str] = None, status: Optional[str] = None, q: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def list_members(chapter_id: Optional[str] = None, section: Optional[str] = None, status: Optional[str] = None, q: Optional[str] = None, include_archived: bool = False, user: dict = Depends(get_current_user)):
     query: dict = {}
     if user["role"] == "national_admin":
         if chapter_id: query["chapter_id"] = chapter_id
@@ -624,7 +674,10 @@ async def list_members(chapter_id: Optional[str] = None, section: Optional[str] 
     else:  # scout
         query["chapter_id"] = user.get("chapter_id")
     if section: query["section"] = section
-    if status: query["status"] = status
+    if status:
+        query["status"] = status
+    elif not include_archived:
+        query["status"] = {"$ne": "archived"}
     if q:
         query["$or"] = [{"full_name": {"$regex": q, "$options": "i"}}, {"full_name_hy": {"$regex": q, "$options": "i"}}, {"email": {"$regex": q, "$options": "i"}}]
     items = await db.members.find(query, {"_id": 0}).sort("full_name", 1).to_list(2000)
@@ -669,6 +722,15 @@ async def archive_member(member_id: str, user: dict = Depends(get_current_user))
     _member_chapter_guard(user, m["chapter_id"])
     await db.members.update_one({"member_id": member_id}, {"$set": {"status": "archived"}})
     await audit(user, "archive", "member", member_id)
+    return {"ok": True}
+
+@api.post("/members/{member_id}/unarchive")
+async def unarchive_member(member_id: str, user: dict = Depends(get_current_user)):
+    m = await db.members.find_one({"member_id": member_id})
+    if not m: raise HTTPException(404, "Not found")
+    _member_chapter_guard(user, m["chapter_id"])
+    await db.members.update_one({"member_id": member_id}, {"$set": {"status": "active"}})
+    await audit(user, "unarchive", "member", member_id)
     return {"ok": True}
 
 # ---------- Badges ----------
@@ -1064,6 +1126,9 @@ async def clear_notifications(user: dict = Depends(get_current_user)):
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
     picture: Optional[str] = None  # base64 data URL
+    bio: Optional[str] = None
+    phone: Optional[str] = None
+    position_title: Optional[str] = None
 
 class PasswordChangeIn(BaseModel):
     current_password: str
@@ -1071,12 +1136,27 @@ class PasswordChangeIn(BaseModel):
 
 @api.put("/auth/me")
 async def update_profile(payload: ProfileUpdate, user: dict = Depends(get_current_user)):
-    upd = {}
-    if payload.name is not None: upd["name"] = payload.name
-    if payload.picture is not None: upd["picture"] = payload.picture
+    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
     if upd:
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": upd})
     return await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0, "password_hash": 0})
+
+class LeaderPublicProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    picture: Optional[str] = None
+    bio: Optional[str] = None
+    phone: Optional[str] = None
+    position_title: Optional[str] = None
+
+@api.put("/users/{uid}/public-profile")
+async def update_leader_public_profile(uid: str, payload: LeaderPublicProfileUpdate, user: dict = Depends(require_roles("national_admin"))):
+    target = await db.users.find_one({"user_id": uid})
+    if not target: raise HTTPException(404, "Not found")
+    upd = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
+    if upd:
+        await db.users.update_one({"user_id": uid}, {"$set": upd})
+        await audit(user, "update_public_profile", "user", uid)
+    return await db.users.find_one({"user_id": uid}, {"_id": 0, "password_hash": 0})
 
 @api.post("/auth/change-password")
 async def change_password(payload: PasswordChangeIn, user: dict = Depends(get_current_user)):
@@ -1094,10 +1174,109 @@ async def change_password(payload: PasswordChangeIn, user: dict = Depends(get_cu
 # ---------- Trash / Archive bin ----------
 @api.get("/trash")
 async def trash_bin(user: dict = Depends(require_roles("national_admin", "chapter_admin"))):
+    member_q = {"status": "archived"}
+    if user["role"] == "chapter_admin":
+        member_q["chapter_id"] = user.get("chapter_id")
     return {
         "chapters": await db.chapters.find({"archived": True}, {"_id": 0}).to_list(200),
         "badges": await db.badges.find({"archived": True}, {"_id": 0}).to_list(500),
         "resources": await db.resources.find({"archived": True}, {"_id": 0, "file_data": 0}).to_list(500),
+        "members": await db.members.find(member_q, {"_id": 0}).to_list(2000),
+    }
+
+# ---------- Galleries ----------
+@api.get("/galleries")
+async def list_galleries(chapter_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    q = {}
+    if chapter_id: q["chapter_id"] = chapter_id
+    return await db.galleries.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+@api.get("/galleries/{gid}")
+async def get_gallery(gid: str, user: dict = Depends(get_current_user)):
+    g = await db.galleries.find_one({"gallery_id": gid}, {"_id": 0})
+    if not g: raise HTTPException(404, "Not found")
+    return g
+
+@api.post("/galleries")
+async def create_gallery(payload: GalleryIn, user: dict = Depends(get_current_user)):
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
+    data = payload.model_dump()
+    if user["role"] in LEADER_ROLES:
+        data["chapter_id"] = user.get("chapter_id")
+    gid = new_id("gal")
+    doc = {"gallery_id": gid, **data, "created_by": user["email"], "created_at": now_iso()}
+    await db.galleries.insert_one(doc)
+    await audit(user, "create", "gallery", gid)
+    return clean(doc)
+
+@api.delete("/galleries/{gid}")
+async def delete_gallery(gid: str, user: dict = Depends(get_current_user)):
+    g = await db.galleries.find_one({"gallery_id": gid})
+    if not g: raise HTTPException(404, "Not found")
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
+    if user["role"] in LEADER_ROLES and g.get("chapter_id") != user.get("chapter_id"):
+        raise HTTPException(403, "Not allowed for other chapters")
+    await db.galleries.delete_one({"gallery_id": gid})
+    await audit(user, "delete", "gallery", gid)
+    return {"ok": True}
+
+class GalleryImagesIn(BaseModel):
+    images: List[dict]  # [{data: base64, caption: str}]
+
+@api.post("/galleries/{gid}/images")
+async def add_gallery_images(gid: str, payload: GalleryImagesIn, user: dict = Depends(get_current_user)):
+    g = await db.galleries.find_one({"gallery_id": gid})
+    if not g: raise HTTPException(404, "Not found")
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
+    if user["role"] in LEADER_ROLES and g.get("chapter_id") != user.get("chapter_id"):
+        raise HTTPException(403, "Not allowed for other chapters")
+    new_imgs = payload.images or []
+    upd = {"$push": {"images": {"$each": new_imgs}}}
+    if not g.get("cover") and new_imgs:
+        upd["$set"] = {"cover": new_imgs[0].get("data", "")}
+    await db.galleries.update_one({"gallery_id": gid}, upd)
+    await audit(user, "add_images", "gallery", gid, {"count": len(new_imgs)})
+    return await db.galleries.find_one({"gallery_id": gid}, {"_id": 0})
+
+@api.delete("/galleries/{gid}/images/{index}")
+async def delete_gallery_image(gid: str, index: int, user: dict = Depends(get_current_user)):
+    g = await db.galleries.find_one({"gallery_id": gid})
+    if not g: raise HTTPException(404, "Not found")
+    if not is_leader(user["role"]): raise HTTPException(403, "Not allowed")
+    if user["role"] in LEADER_ROLES and g.get("chapter_id") != user.get("chapter_id"):
+        raise HTTPException(403, "Not allowed for other chapters")
+    imgs = g.get("images") or []
+    if 0 <= index < len(imgs):
+        imgs.pop(index)
+        await db.galleries.update_one({"gallery_id": gid}, {"$set": {"images": imgs}})
+    return {"ok": True}
+
+# ---------- Chapter: promote member to leader ----------
+@api.post("/chapters/{chapter_id}/promote-member")
+async def promote_member_to_leader(chapter_id: str, payload: PromoteMemberIn, user: dict = Depends(get_current_user)):
+    if user["role"] not in ADMIN_ROLES:
+        raise HTTPException(403, "Only chapter admin / national admin can promote")
+    _member_chapter_guard(user, chapter_id)
+    m = await db.members.find_one({"member_id": payload.member_id})
+    if not m: raise HTTPException(404, "Member not found")
+    if m.get("chapter_id") != chapter_id:
+        raise HTTPException(400, "Member not in this chapter")
+    if payload.position not in POSITION_TO_ROLE:
+        raise HTTPException(400, "Invalid leadership position")
+    await db.members.update_one({"member_id": payload.member_id}, {"$set": {"position": payload.position}})
+    # sync user role if user account exists for this email
+    target_role = POSITION_TO_ROLE[payload.position]
+    if target_role == "chapter_admin" and user["role"] != "national_admin":
+        target_role = "chapter_leader"
+    linked_user = None
+    if m.get("email"):
+        linked_user = await db.users.find_one({"email": (m["email"] or "").lower()})
+        if linked_user:
+            await db.users.update_one({"user_id": linked_user["user_id"]}, {"$set": {"role": target_role, "chapter_id": chapter_id}})
+    await audit(user, "promote", "member", payload.member_id, {"position": payload.position, "role": target_role})
+    return {
+        "ok": True, "position": payload.position, "role": target_role,
+        "linked_user": bool(linked_user),
     }
 
 # ---------- Users / Administration ----------
@@ -1387,21 +1566,46 @@ async def stats_scout(user: dict = Depends(get_current_user)):
 async def global_search(q: str = Query(...), user: dict = Depends(get_current_user)):
     rx = {"$regex": q, "$options": "i"}
     results = {
-        "chapters": await db.chapters.find({"$or": [{"name": rx}, {"name_hy": rx}]}, {"_id": 0}).limit(10).to_list(10),
+        "chapters": await db.chapters.find({"$and": [{"$or": [{"name": rx}, {"name_hy": rx}]}, {"archived": {"$ne": True}}]}, {"_id": 0}).limit(10).to_list(10),
         "members": [],
         "programs": await db.programs.find({"$or": [{"title": rx}, {"title_hy": rx}]}, {"_id": 0}).limit(10).to_list(10),
-        "badges": await db.badges.find({"$or": [{"name": rx}, {"name_hy": rx}]}, {"_id": 0}).limit(10).to_list(10),
+        "badges": await db.badges.find({"$and": [{"$or": [{"name": rx}, {"name_hy": rx}]}, {"archived": {"$ne": True}}]}, {"_id": 0}).limit(10).to_list(10),
     }
-    mem_q = {"$or": [{"full_name": rx}, {"full_name_hy": rx}, {"email": rx}]}
+    mem_q = {"$and": [{"$or": [{"full_name": rx}, {"full_name_hy": rx}, {"email": rx}]}, {"status": {"$ne": "archived"}}]}
     if user["role"] != "national_admin":
-        mem_q = {"$and": [mem_q, {"chapter_id": user.get("chapter_id")}]}
+        mem_q["$and"].append({"chapter_id": user.get("chapter_id")})
     results["members"] = await db.members.find(mem_q, {"_id": 0}).limit(10).to_list(10)
     return results
 
 # ---------- Seed ----------
+async def ensure_seed_users_present():
+    """Idempotent: (re)create the documented seed users if any is missing."""
+    admin_email = os.environ["ADMIN_EMAIL"]
+    admin_password = os.environ["ADMIN_PASSWORD"]
+    users_seed = [
+        {"user_id": "usr_admin", "email": admin_email, "name": "National Administrator",
+         "password_hash": hash_password(admin_password), "role": "national_admin", "chapter_id": None},
+        {"user_id": "usr_ararat_admin", "email": "ararat.leader@scouts.am", "name": "Anahit Sargsyan",
+         "password_hash": hash_password("scout123"), "role": "chapter_admin", "chapter_id": "chp_ararat"},
+        {"user_id": "usr_sevan_leader", "email": "sevan.leader@scouts.am", "name": "Davit Petrosyan",
+         "password_hash": hash_password("scout123"), "role": "chapter_leader", "chapter_id": "chp_sevan"},
+        {"user_id": "usr_gyumri_admin", "email": "gyumri.leader@scouts.am", "name": "Mher Grigoryan",
+         "password_hash": hash_password("scout123"), "role": "chapter_admin", "chapter_id": "chp_gyumri"},
+        {"user_id": "usr_narek", "email": "narek@scouts.am", "name": "Narek Hovhannisyan",
+         "password_hash": hash_password("scout123"), "role": "scout", "chapter_id": "chp_ararat"},
+    ]
+    for u in users_seed:
+        await db.users.update_one(
+            {"email": u["email"]},
+            {"$setOnInsert": {**u, "picture": "", "status": "active", "created_at": now_iso()}},
+            upsert=True,
+        )
+
 async def seed():
+    # Ensure documented seed logins always exist (idempotent).
+    await ensure_seed_users_present()
     # Reset only if empty
-    if await db.users.count_documents({"role": "national_admin"}) > 0:
+    if await db.chapters.count_documents({}) > 0:
         return
 
     admin_email = os.environ["ADMIN_EMAIL"]
@@ -1441,7 +1645,9 @@ async def seed():
         {"user_id": "usr_narek", "email": "narek@scouts.am", "name": "Narek Hovhannisyan",
          "password_hash": hash_password("scout123"), "role": "scout", "chapter_id": "chp_ararat", "picture": "", "status": "active", "created_at": now_iso()},
     ]
-    await db.users.insert_many(users_data)
+    # Users — upsert (some may already exist from ensure_seed_users_present)
+    for u in users_data:
+        await db.users.update_one({"email": u["email"]}, {"$set": u}, upsert=True)
 
     # Members
     first_names_en = ["Narek", "Ani", "Tigran", "Lilit", "Aram", "Mariam", "Hayk", "Nare", "Vahe", "Sona", "Arman", "Ashkhen", "Sevak", "Karine", "Suren", "Anahit", "Levon", "Nane", "Gor", "Tatev", "Erik", "Milena", "Rafael", "Zara", "Grigor", "Astghik", "Robert", "Nvard", "Vardan", "Mane"]

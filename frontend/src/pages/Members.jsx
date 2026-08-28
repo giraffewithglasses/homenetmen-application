@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { confirmWithUndo } from "@/lib/undo";
-import { Plus, Download, Search, Archive, Pencil, UserPlus } from "lucide-react";
+import { Plus, Download, Search, Archive, Pencil, UserPlus, EyeOff, Eye } from "lucide-react";
 
 const SECTIONS = ["Cubs", "Scouts", "Senior Scouts", "Rovers"];
 const POSITIONS = [
@@ -49,6 +49,7 @@ export default function Members() {
   const [section, setSection] = useState("all");
   const [status, setStatus] = useState("all");
   const [chapter, setChapter] = useState("all");
+  const [hideArchived, setHideArchived] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null); // member being edited
   const [form, setForm] = useState({ ...emptyForm, chapter_id: user?.chapter_id || "" });
@@ -60,10 +61,15 @@ export default function Members() {
     if (section !== "all") params.append("section", section);
     if (status !== "all") params.append("status", status);
     if (q) params.append("q", q);
+    // ask backend to include archived when the user wants to see them (toggle off = show)
+    if (status === "all" && !hideArchived) params.append("include_archived", "true");
     const { data } = await api.get(`/members?${params}`);
-    setMembers(data); setSelected(new Set());
+    const filtered = hideArchived && status === "all"
+      ? data.filter(m => m.status !== "archived")
+      : data;
+    setMembers(filtered); setSelected(new Set());
   };
-  useEffect(() => { load(); }, [q, section, status, chapter]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [q, section, status, chapter, hideArchived]);
   useEffect(() => { api.get("/chapters").then(r => setChapters(r.data)); }, []);
 
   const openNew = () => {
@@ -176,6 +182,14 @@ export default function Members() {
           <p className="text-muted-foreground mt-1 text-sm">{members.length} shown{selected.size ? ` · ${selected.size} selected` : ""}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            className="btn-pill"
+            onClick={() => setHideArchived(!hideArchived)}
+            data-testid="toggle-hide-archived"
+          >
+            {hideArchived ? <><EyeOff size={14} className="mr-2"/>Archived hidden</> : <><Eye size={14} className="mr-2"/>Showing archived</>}
+          </Button>
           {selected.size > 0 && (
             <Button variant="outline" className="btn-pill text-[hsl(0,65%,55%)] border-[hsl(0,65%,55%)]/40 hover:bg-[hsl(0,65%,55%)]/10" onClick={archiveBulk} data-testid="bulk-archive-members">
               <Archive size={16} className="mr-2"/> Archive selected ({selected.size})

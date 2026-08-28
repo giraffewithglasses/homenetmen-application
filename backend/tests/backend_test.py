@@ -266,8 +266,12 @@ class TestUserRole:
 
 # ---------- Search ----------
 class TestSearch:
-    def test_search_ararat(self, admin_token):
-        r = requests.get(f"{API}/search?q=Ararat", headers=hdr(admin_token))
+    def test_search_chapter_by_name(self, admin_token):
+        # Chapter names were renamed by the app owner; derive the query from live data
+        chapters = requests.get(f"{API}/chapters", headers=hdr(admin_token)).json()
+        assert chapters, "no chapters available to search"
+        term = chapters[0]["name"].split()[0]
+        r = requests.get(f"{API}/search?q={term}", headers=hdr(admin_token))
         assert r.status_code == 200
         j = r.json()
         assert len(j["chapters"]) >= 1
