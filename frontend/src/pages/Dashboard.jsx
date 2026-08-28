@@ -79,7 +79,7 @@ function NationalDashboard({ lang }) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats?.per_chapter || []}>
                 <XAxis dataKey="chapter" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} tickFormatter={(v) => Math.round(v)} />
                 <Tooltip />
                 <Bar dataKey="members" fill="#E07A5F" radius={[8, 8, 0, 0]} />
               </BarChart>

@@ -1447,10 +1447,13 @@ async def update_profile(payload: ProfileUpdate, user: dict = Depends(get_curren
 
 class LeaderPublicProfileUpdate(BaseModel):
     name: Optional[str] = None
+    name_hy: Optional[str] = None
     picture: Optional[str] = None
     bio: Optional[str] = None
+    bio_hy: Optional[str] = None
     phone: Optional[str] = None
     position_title: Optional[str] = None
+    position_title_hy: Optional[str] = None
 
 @api.put("/users/{uid}/public-profile")
 async def update_leader_public_profile(uid: str, payload: LeaderPublicProfileUpdate, user: dict = Depends(require_roles("national_admin"))):

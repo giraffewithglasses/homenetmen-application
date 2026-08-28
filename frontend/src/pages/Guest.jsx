@@ -33,6 +33,9 @@ export default function Guest() {
   const [leaderEdit, setLeaderEdit] = useState(false);
   const [leaderForm, setLeaderForm] = useState({});
   const [savingLeader, setSavingLeader] = useState(false);
+  const [openProgram, setOpenProgram] = useState(null);
+  const [openNewsletter, setOpenNewsletter] = useState(null);
+  const [openGallery, setOpenGallery] = useState(null);
 
   useEffect(() => {
     api.get("/public/overview").then(r => setOverview(r.data)).catch(() => {});
@@ -129,12 +132,11 @@ export default function Guest() {
           </div>
 
           {overview && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-14 max-w-4xl">
+            <div className="grid grid-cols-3 gap-3 mt-14 max-w-3xl">
               {[
                 { n: overview.stats.chapters, l: t("Chapters", "Մասնաճյուղ"), i: Building2 },
                 { n: overview.stats.members, l: t("Scouts", "Սկաուտ"), i: Users },
                 { n: overview.stats.badges, l: t("Badges", "Կրծքանշան"), i: Award },
-                { n: overview.stats.programs, l: t("Programs", "Ծրագիր"), i: Compass },
               ].map((s) => (
                 <div key={s.l} className="rounded-2xl bg-white/10 backdrop-blur border border-white/20 p-5">
                   <s.i size={18} className="opacity-70"/>
@@ -156,8 +158,8 @@ export default function Guest() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="uppercase-label">{t("National announcement", "Ազգային ծանուցում")}</div>
-              <div className="font-display font-bold text-lg">{announcements[0].title}</div>
-              <div className="text-sm text-muted-foreground line-clamp-1">{announcements[0].message}</div>
+              <div className="font-display font-bold text-lg">{announcements[0].title_hy && lang === "hy" ? announcements[0].title_hy : announcements[0].title}</div>
+              <div className="text-sm text-muted-foreground line-clamp-1">{announcements[0].message_hy && lang === "hy" ? announcements[0].message_hy : announcements[0].message}</div>
             </div>
           </Card>
         </section>
@@ -167,23 +169,26 @@ export default function Guest() {
       <section className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20">
         <div className="grid lg:grid-cols-3 gap-6">
           {[
-            { i: Tent, en: "Camp Craft", hy: "Ճամբարային գործ", de: "Pitch a tent, build a fire, and cook under the stars — the fundamentals of the outdoors." },
-            { i: Compass, en: "Navigation", hy: "Կողմնորոշում", de: "Read maps, use a compass, plan a route — never get lost again." },
-            { i: Heart, en: "Service", hy: "Ծառայություն", de: "Ten hours a season serving neighbors, forests, and the country we love." },
+            { i: Tent, en: "Camp Craft", hy: "Ճամբարային գործ", de_en: "Pitch a tent, build a fire, and cook under the stars — the fundamentals of the outdoors.", de_hy: "Վրան տեղադրիր, խարույկ վառիր և աստղերի տակ ճաշ պատրաստիր՝ բնության հիմունքները։" },
+            { i: Compass, en: "Navigation", hy: "Կողմնորոշում", de_en: "Read maps, use a compass, plan a route — never get lost again.", de_hy: "Կարդա քարտեզը, օգտագործիր կողմնացույցը, պլանավորիր երթուղին։" },
+            { i: Heart, en: "Service", hy: "Ծառայություն", de_en: "Ten hours a season serving neighbors, forests, and the country we love.", de_hy: "Յուրաքանչյուր սեզոն տասը ժամ՝ մեր հարևանների, անտառների և հայրենիքի համար։" },
           ].map((f) => (
             <Card key={f.en} className="clay-card p-8 hover-lift">
               <div className="w-14 h-14 rounded-2xl bg-[hsl(149,40%,30%)] text-white flex items-center justify-center">
                 <f.i size={22}/>
               </div>
               <div className="font-display font-bold text-2xl mt-5">{t(f.en, f.hy)}</div>
-              <p className="text-sm text-muted-foreground mt-2">{f.de}</p>
+              <p className="text-sm text-muted-foreground mt-2">{t(f.de_en, f.de_hy)}</p>
             </Card>
           ))}
         </div>
       </section>
 
+      {/* Reorderable sections (order controlled from Administration → Homepage) */}
+      <div className="flex flex-col">
+
       {/* Chapters */}
-      <section id="chapters" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20">
+      <section id="chapters" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("chapters") }}>
         <div className="flex items-end justify-between mb-6">
           <div>
             <div className="uppercase-label">{t("Local hubs", "Մասնաճյուղեր")}</div>
@@ -198,8 +203,8 @@ export default function Guest() {
               <div className="w-11 h-11 rounded-2xl bg-[hsl(149,40%,30%)] text-white flex items-center justify-center">
                 <Building2 size={20}/>
               </div>
-              <div className="font-display font-bold text-lg mt-4">{c.name}</div>
-              <div className="text-xs text-muted-foreground">{c.name_hy}</div>
+              <div className="font-display font-bold text-lg mt-4">{lang === "hy" ? (c.name_hy || c.name) : c.name}</div>
+              <div className="text-xs text-muted-foreground">{lang === "hy" ? c.name : c.name_hy}</div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
                 <MapPin size={12}/>{c.location}
               </div>
@@ -216,7 +221,7 @@ export default function Guest() {
       </section>
 
       {/* Badges */}
-      <section id="badges" className="py-20" style={{ background: "hsl(152 43% 15%)", color: "hsl(42 30% 94%)" }}>
+      <section id="badges" className="py-20" style={{ background: "hsl(152 43% 15%)", color: "hsl(42 30% 94%)", order: orderIdx("badges") }}>
         <div className="max-w-[1400px] mx-auto px-4 lg:px-8">
           <div className="uppercase-label" style={{ color: "hsl(32 87% 75%)" }}>{t("Adventures", "Արկածներ")}</div>
           <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight max-w-3xl">
@@ -242,7 +247,7 @@ export default function Guest() {
       </section>
 
       {/* Upcoming events */}
-      <section id="events" className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20">
+      <section id="events" className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20" style={{ order: orderIdx("events") }}>
         <div className="flex items-end justify-between mb-6">
           <div>
             <div className="uppercase-label">{t("On the horizon", "Առաջիկա")}</div>
@@ -266,7 +271,7 @@ export default function Guest() {
             const day = d.getDate();
             const mon = d.toLocaleString(lang === "hy" ? "hy-AM" : "en-US", { month: "short" });
             return (
-              <Card key={p.program_id} className="clay-card p-6 hover-lift flex gap-5">
+              <Card key={p.program_id} onClick={() => setOpenProgram(p)} className="clay-card p-6 hover-lift flex gap-5 cursor-pointer" data-testid={`guest-event-${p.program_id}`}>
                 <div className="w-16 flex-shrink-0 text-center">
                   <div className="rounded-2xl bg-[hsl(12,65%,63%)] text-white py-3 shadow-inner">
                     <div className="text-[10px] uppercase tracking-widest font-bold">{mon}</div>
@@ -289,7 +294,7 @@ export default function Guest() {
       </section>
 
       {/* Newsletters */}
-      <section id="newsletters" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20">
+      <section id="newsletters" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("newsletters") }}>
         <div className="mb-6">
           <div className="uppercase-label">{t("From HQ", "Կենտրոնից")}</div>
           <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
@@ -298,13 +303,12 @@ export default function Guest() {
         </div>
 
         {newsletters[0] && (
-          <Card className="clay-card overflow-hidden mb-6">
+          <Card onClick={() => setOpenNewsletter(newsletters[0])} className="clay-card overflow-hidden mb-6 cursor-pointer hover-lift" data-testid={`guest-newsletter-${newsletters[0].newsletter_id}`}>
             <div className="grid md:grid-cols-2">
               <div
                 className="h-56 md:h-auto"
                 style={{
-                  backgroundImage:
-                    "url('https://images.unsplash.com/photo-1597120590849-a1d5a743d155?crop=entropy&cs=srgb&fm=jpg&q=85')",
+                  backgroundImage: `url('${newsletters[0].cover || 'https://images.unsplash.com/photo-1597120590849-a1d5a743d155?crop=entropy&cs=srgb&fm=jpg&q=85'}')`,
                   backgroundSize: "cover", backgroundPosition: "center",
                 }}
               />
@@ -325,22 +329,23 @@ export default function Guest() {
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {newsletters.slice(1).map((n) => (
-            <Card key={n.newsletter_id} className="clay-card p-6 hover-lift">
-              <div className="w-10 h-10 rounded-full bg-[hsl(32,87%,67%)]/25 text-[hsl(32,87%,55%)] flex items-center justify-center">
-                <Mail size={18}/>
+            <Card key={n.newsletter_id} onClick={() => setOpenNewsletter(n)} className="clay-card overflow-hidden hover-lift cursor-pointer" data-testid={`guest-newsletter-${n.newsletter_id}`}>
+              {n.cover && <div className="h-32 bg-muted" style={{ backgroundImage: `url('${n.cover}')`, backgroundSize: "cover", backgroundPosition: "center" }}/>}
+              <div className="p-6">
+                {!n.cover && <div className="w-10 h-10 rounded-full bg-[hsl(32,87%,67%)]/25 text-[hsl(32,87%,55%)] flex items-center justify-center"><Mail size={18}/></div>}
+                <div className="uppercase-label mt-3">{new Date(n.created_at).toLocaleDateString()}</div>
+                <div className="font-display font-bold text-lg mt-1">
+                  {lang === "hy" ? n.title_hy || n.title : n.title}
+                </div>
+                <p className="text-sm mt-3 line-clamp-3">{n.short_description}</p>
               </div>
-              <div className="uppercase-label mt-3">{new Date(n.created_at).toLocaleDateString()}</div>
-              <div className="font-display font-bold text-lg mt-1">
-                {lang === "hy" ? n.title_hy || n.title : n.title}
-              </div>
-              <p className="text-sm mt-3 line-clamp-3">{n.short_description}</p>
             </Card>
           ))}
         </div>
       </section>
 
       {/* Leaders */}
-      <section id="leaders" className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20">
+      <section id="leaders" className="max-w-[1400px] mx-auto px-4 lg:px-8 py-20" style={{ order: orderIdx("leaders") }}>
         <div className="mb-6">
           <div className="uppercase-label">{t("Meet the team", "Ղեկավարներ")}</div>
           <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
@@ -355,15 +360,15 @@ export default function Guest() {
             <button
               key={l.user_id}
               type="button"
-              onClick={() => { setActiveLeader(l); setLeaderEdit(false); setLeaderForm({ name: l.name || "", position_title: l.position_title || "", bio: l.bio || "", phone: l.phone || "", picture: l.picture || "" }); }}
+              onClick={() => { setActiveLeader(l); setLeaderEdit(false); setLeaderForm({ name: l.name || "", name_hy: l.name_hy || "", position_title: l.position_title || "", position_title_hy: l.position_title_hy || "", bio: l.bio || "", bio_hy: l.bio_hy || "", phone: l.phone || "", picture: l.picture || "" }); }}
               className="text-center group focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(12,65%,63%)] rounded-2xl p-2 hover:bg-white/50 transition"
               data-testid={`leader-${l.user_id}`}
             >
               <div className="w-24 h-24 mx-auto rounded-full border-4 border-[hsl(12,65%,63%)]/40 group-hover:border-[hsl(12,65%,63%)] bg-[hsl(149,40%,30%)] text-white flex items-center justify-center font-display font-black text-3xl overflow-hidden transition">
                 {l.picture ? <img src={l.picture} alt="" className="w-full h-full object-cover"/> : l.name?.[0]}
               </div>
-              <div className="font-semibold text-sm mt-3">{l.name}</div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-0.5">{l.position_title || (l.role || "").replace(/_/g, " ")}</div>
+              <div className="font-semibold text-sm mt-3">{lang === "hy" ? (l.name_hy || l.name) : l.name}</div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-0.5">{lang === "hy" ? (l.position_title_hy || l.position_title || (l.role || "").replace(/_/g, " ")) : (l.position_title || (l.role || "").replace(/_/g, " "))}</div>
               {l.chapter_name && <div className="text-xs text-[hsl(12,65%,63%)] font-semibold mt-0.5">{l.chapter_name}</div>}
             </button>
           ))}
@@ -385,12 +390,12 @@ export default function Guest() {
                   {activeLeader.picture ? <img src={activeLeader.picture} alt="" className="w-full h-full object-cover"/> : activeLeader.name?.[0]}
                 </div>
                 <div>
-                  <div className="font-display font-bold text-lg">{activeLeader.name}</div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{activeLeader.position_title || (activeLeader.role || "").replace(/_/g, " ")}</div>
+                  <div className="font-display font-bold text-lg">{lang === "hy" ? (activeLeader.name_hy || activeLeader.name) : activeLeader.name}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{lang === "hy" ? (activeLeader.position_title_hy || activeLeader.position_title || (activeLeader.role || "").replace(/_/g, " ")) : (activeLeader.position_title || (activeLeader.role || "").replace(/_/g, " "))}</div>
                   {activeLeader.chapter_name && <div className="text-xs text-[hsl(12,65%,63%)] font-semibold mt-0.5">{activeLeader.chapter_name}</div>}
                 </div>
               </div>
-              {activeLeader.bio && <p className="text-sm text-muted-foreground whitespace-pre-line">{activeLeader.bio}</p>}
+              {(lang === "hy" ? activeLeader.bio_hy : activeLeader.bio) && <p className="text-sm text-muted-foreground whitespace-pre-line">{lang === "hy" ? (activeLeader.bio_hy || activeLeader.bio) : activeLeader.bio}</p>}
               <div className="space-y-1 text-sm">
                 {activeLeader.email && <div className="flex items-center gap-2"><Mail size={14} className="text-muted-foreground"/> {activeLeader.email}</div>}
                 {activeLeader.phone && <div className="flex items-center gap-2"><Phone size={14} className="text-muted-foreground"/> {activeLeader.phone}</div>}
@@ -410,8 +415,16 @@ export default function Guest() {
                 <Input value={leaderForm.name} onChange={e => setLeaderForm({ ...leaderForm, name: e.target.value })} data-testid="leader-form-name"/>
               </div>
               <div>
+                <Label>{t("Name (Armenian)", "Անուն (հայերեն)")}</Label>
+                <Input value={leaderForm.name_hy} onChange={e => setLeaderForm({ ...leaderForm, name_hy: e.target.value })} placeholder="Դավիթ Պետրոսյան" data-testid="leader-form-name-hy"/>
+              </div>
+              <div>
                 <Label>{t("Position", "Պաշտոն")}</Label>
                 <Input value={leaderForm.position_title} onChange={e => setLeaderForm({ ...leaderForm, position_title: e.target.value })} placeholder="e.g. Scout Leader" data-testid="leader-form-position"/>
+              </div>
+              <div>
+                <Label>{t("Position (Armenian)", "Պաշտոն (հայերեն)")}</Label>
+                <Input value={leaderForm.position_title_hy} onChange={e => setLeaderForm({ ...leaderForm, position_title_hy: e.target.value })} placeholder="օրինակ՝ Սկաուտի ղեկավար" data-testid="leader-form-position-hy"/>
               </div>
               <div>
                 <Label>{t("Phone", "Հեռախոս")}</Label>
@@ -419,7 +432,11 @@ export default function Guest() {
               </div>
               <div>
                 <Label>{t("About", "Մասին")}</Label>
-                <Textarea rows={4} value={leaderForm.bio} onChange={e => setLeaderForm({ ...leaderForm, bio: e.target.value })} data-testid="leader-form-bio"/>
+                <Textarea rows={3} value={leaderForm.bio} onChange={e => setLeaderForm({ ...leaderForm, bio: e.target.value })} data-testid="leader-form-bio"/>
+              </div>
+              <div>
+                <Label>{t("About (Armenian)", "Մասին (հայերեն)")}</Label>
+                <Textarea rows={3} value={leaderForm.bio_hy} onChange={e => setLeaderForm({ ...leaderForm, bio_hy: e.target.value })} data-testid="leader-form-bio-hy"/>
               </div>
               <div>
                 <Label>{t("Profile picture", "Լուսանկար")}</Label>
@@ -447,9 +464,12 @@ export default function Guest() {
                     try {
                       const payload = {
                         name: leaderForm.name,
+                        name_hy: leaderForm.name_hy,
                         position_title: leaderForm.position_title,
+                        position_title_hy: leaderForm.position_title_hy,
                         phone: leaderForm.phone,
                         bio: leaderForm.bio,
+                        bio_hy: leaderForm.bio_hy,
                         picture: leaderForm.picture,
                       };
                       const { data: updated } = await api.put(`/users/${activeLeader.user_id}/public-profile`, payload);
@@ -479,7 +499,7 @@ export default function Guest() {
 
       {/* Galleries */}
       {galleries.length > 0 && (
-        <section id="galleries" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20">
+        <section id="galleries" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("galleries") }}>
           <div className="mb-6">
             <div className="uppercase-label">{t("Snapshots", "Պահեր")}</div>
             <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
@@ -488,15 +508,15 @@ export default function Guest() {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {galleries.slice(0, 6).map(g => (
-              <Card key={g.gallery_id} className="clay-card overflow-hidden hover-lift" data-testid={`guest-gallery-${g.gallery_id}`}>
-                <div className="h-52 relative bg-muted">
+              <Card key={g.gallery_id} onClick={() => setOpenGallery(g)} className="clay-card overflow-hidden hover-lift cursor-pointer group" data-testid={`guest-gallery-${g.gallery_id}`}>
+                <div className="h-52 relative bg-muted overflow-hidden">
                   {g.cover
-                    ? <img src={g.cover} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
-                    : (g.images?.[0]?.data ? <img src={g.images[0].data} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }}/> : null)}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"/>
+                    ? <img src={g.cover} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
+                    : (g.images?.[0]?.data ? <img src={g.images[0].data} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { e.currentTarget.style.display = "none"; }}/> : null)}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"/>
                   <div className="absolute bottom-3 left-4 right-4 text-white">
                     <div className="font-display font-bold">{g.title}</div>
-                    <div className="text-xs opacity-80">{g.images?.length || 0} photos</div>
+                    <div className="text-xs opacity-80">{g.images?.length || 0} {t("photos", "լուսանկար")}</div>
                   </div>
                 </div>
               </Card>
@@ -507,7 +527,7 @@ export default function Guest() {
 
       {/* Resources */}
       {resources.length > 0 && (
-        <section id="resources" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20">
+        <section id="resources" className="max-w-[1400px] mx-auto px-4 lg:px-8 pb-20" style={{ order: orderIdx("resources") }}>
           <div className="mb-6">
             <div className="uppercase-label">{t("Downloads", "Ներբեռնումներ")}</div>
             <h2 className="font-display text-4xl md:text-5xl font-black tracking-tight">
@@ -583,6 +603,125 @@ export default function Guest() {
         </Card>
       </section>
 
+      {/* Program details dialog */}
+      </div>
+      <Dialog open={!!openProgram} onOpenChange={(o) => !o && setOpenProgram(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="guest-program-dialog">
+          {openProgram && (() => {
+            const p = openProgram;
+            const d = new Date(p.date);
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{lang === "hy" ? p.title_hy || p.title : p.title}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    <Badge className="rounded-full bg-[hsl(149,40%,30%)]">{p.section}</Badge>
+                    {!p.chapter_id && <Badge className="rounded-full bg-[hsl(32,87%,67%)] text-[hsl(155,60%,8%)]">{t("National", "Ազգային")}</Badge>}
+                    {Number(p.fee) > 0 && <Badge className="rounded-full bg-[hsl(12,65%,63%)]">֏{Number(p.fee).toLocaleString()} AMD</Badge>}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="p-3 rounded-xl bg-muted">
+                      <div className="uppercase-label">{t("Date", "Ամսաթիվ")}</div>
+                      <div className="font-semibold text-sm">{d.toLocaleDateString(lang === "hy" ? "hy-AM" : "en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-muted">
+                      <div className="uppercase-label">{t("Time", "Ժամ")}</div>
+                      <div className="font-semibold text-sm">{p.start_time} – {p.end_time}</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-muted">
+                      <div className="uppercase-label">{t("Location", "Վայր")}</div>
+                      <div className="font-semibold text-sm truncate">{p.location}</div>
+                    </div>
+                  </div>
+                  {p.description && <p className="text-sm text-muted-foreground">{p.description}</p>}
+                  {p.objectives && (
+                    <div>
+                      <div className="uppercase-label">{t("Objectives", "Նպատակներ")}</div>
+                      <p className="text-sm mt-1 whitespace-pre-line">{p.objectives}</p>
+                    </div>
+                  )}
+                  {p.prerequisites && (
+                    <div className="rounded-xl bg-[hsl(32,87%,67%)]/15 border-l-4 border-[hsl(32,87%,55%)] p-3">
+                      <div className="uppercase-label text-[hsl(32,87%,45%)]">{t("Prerequisites", "Նախապահանջներ")}</div>
+                      <p className="text-sm mt-1 whitespace-pre-line">{p.prerequisites}</p>
+                    </div>
+                  )}
+                  {p.activities?.length > 0 && (
+                    <div>
+                      <div className="uppercase-label mb-2">{t("Schedule", "Ծրագրի ցանկ")}</div>
+                      <div className="space-y-2">
+                        {p.activities.map((a, i) => (
+                          <div key={i} className="p-3 rounded-xl border border-border">
+                            <div className="text-xs text-muted-foreground">{a.time}</div>
+                            <div className="font-semibold text-sm">{a.title}</div>
+                            {a.description && <div className="text-xs text-muted-foreground mt-1">{a.description}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {p.materials && (
+                    <div>
+                      <div className="uppercase-label">{t("Materials", "Պիտույքներ")}</div>
+                      <p className="text-sm mt-1 whitespace-pre-line">{p.materials}</p>
+                    </div>
+                  )}
+                  <Link to={user ? `/programs/${p.program_id}` : "/login"}>
+                    <Button className="btn-pill w-full bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" data-testid="guest-program-cta">
+                      {user ? t("Open in dashboard", "Բացել վահանակում") : t("Sign in to register", "Մուտք՝ գրանցվելու համար")}
+                    </Button>
+                  </Link>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Newsletter details dialog */}
+      <Dialog open={!!openNewsletter} onOpenChange={(o) => !o && setOpenNewsletter(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0" data-testid="guest-newsletter-dialog">
+          {openNewsletter && (
+            <>
+              {openNewsletter.cover && <div className="h-48" style={{ backgroundImage: `url('${openNewsletter.cover}')`, backgroundSize: "cover", backgroundPosition: "center" }}/>}
+              <div className="p-6 space-y-3">
+                <DialogHeader>
+                  <div className="uppercase-label">{new Date(openNewsletter.created_at).toLocaleDateString(lang === "hy" ? "hy-AM" : "en-US", { month: "long", day: "numeric", year: "numeric" })} · {t("By", "Հեղինակ")} {openNewsletter.author}</div>
+                  <DialogTitle className="!text-2xl">{lang === "hy" ? openNewsletter.title_hy || openNewsletter.title : openNewsletter.title}</DialogTitle>
+                </DialogHeader>
+                {openNewsletter.short_description && <p className="text-sm text-muted-foreground italic">{openNewsletter.short_description}</p>}
+                <div className="prose prose-sm max-w-none whitespace-pre-line text-sm leading-relaxed">{openNewsletter.content}</div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Gallery viewer dialog (no download) */}
+      <Dialog open={!!openGallery} onOpenChange={(o) => !o && setOpenGallery(null)}>
+        <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto" data-testid="guest-gallery-dialog">
+          {openGallery && (
+            <>
+              <DialogHeader>
+                <div className="uppercase-label">{t("Snapshots", "Պահեր")} · {openGallery.images?.length || 0} {t("photos", "լուսանկար")}</div>
+                <DialogTitle>{openGallery.title}</DialogTitle>
+              </DialogHeader>
+              {openGallery.description && <p className="text-sm text-muted-foreground -mt-2">{openGallery.description}</p>}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4">
+                {(openGallery.images || []).map((img, i) => (
+                  <div key={i} className="aspect-square rounded-xl overflow-hidden bg-muted">
+                    <img src={img.data} alt={img.caption || `photo ${i+1}`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none"; }}/>
+                  </div>
+                ))}
+                {!openGallery.images?.length && <div className="col-span-full text-sm text-muted-foreground text-center py-6">{t("No photos yet.", "Դեռ լուսանկարներ չկան։")}</div>}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Footer */}
       <footer className="border-t border-border bg-[hsl(155,60%,8%)] text-white">
         <div className="max-w-[1400px] mx-auto px-4 lg:px-8 py-14 grid md:grid-cols-4 gap-8">
@@ -597,10 +736,10 @@ export default function Guest() {
               </div>
             </div>
             <p className="text-xs text-white/70 leading-relaxed">
-              {t(
-                "The scouting movement of HOMENETMEN — building character through the outdoors, community, and service.",
-                "ՀՄԸՄ-ի սկաուտական շարժումը՝ բնության, համայնքի և ծառայության միջոցով բնավորության կրթություն։"
-              )}
+              {lang === "hy"
+                ? (footer.description_hy || "ՀՄԸՄ-ի սկաուտական շարժումը՝ բնության, համայնքի և ծառայության միջոցով բնավորության կրթություն։")
+                : (footer.description || "The scouting movement of HOMENETMEN — building character through the outdoors, community, and service.")
+              }
             </p>
           </div>
 
@@ -609,16 +748,13 @@ export default function Guest() {
             <div className="text-sm space-y-2 text-white/80">
               <div className="flex items-start gap-2">
                 <MapPin size={14} className="mt-0.5 flex-shrink-0"/>
-                <div>
-                  Yervand Kochar 17/6<br/>
-                  Yerevan, Armenia
-                </div>
+                <div className="whitespace-pre-line">{footer.hq_address || "Yervand Kochar 17/6\nYerevan, Armenia"}</div>
               </div>
               <div className="flex items-center gap-2">
-                <Mail size={14}/> <a href="mailto:hq@homenetmen-hask.am" className="hover:text-[hsl(12,65%,63%)]">hq@homenetmen-hask.am</a>
+                <Mail size={14}/> <a href={`mailto:${footer.hq_email || "hq@homenetmen-hask.am"}`} className="hover:text-[hsl(12,65%,63%)]">{footer.hq_email || "hq@homenetmen-hask.am"}</a>
               </div>
               <div className="flex items-center gap-2">
-                <Phone size={14}/> <a href="tel:+37410000000" className="hover:text-[hsl(12,65%,63%)]">+374 10 000 000</a>
+                <Phone size={14}/> <a href={`tel:${(footer.hq_phone || "+37410000000").replace(/\s/g, "")}`} className="hover:text-[hsl(12,65%,63%)]">{footer.hq_phone || "+374 10 000 000"}</a>
               </div>
             </div>
           </div>
@@ -646,11 +782,11 @@ export default function Guest() {
                 height="100%"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
-                src="https://www.openstreetmap.org/export/embed.html?bbox=44.5010%2C40.1780%2C44.5210%2C40.1900&layer=mapnik&marker=40.1840%2C44.5110"
+                src={`https://www.openstreetmap.org/export/embed.html?bbox=${(footer.longitude || 44.5175) - 0.01}%2C${(footer.latitude || 40.1893) - 0.005}%2C${(footer.longitude || 44.5175) + 0.01}%2C${(footer.latitude || 40.1893) + 0.005}&layer=mapnik&marker=${footer.latitude || 40.1893}%2C${footer.longitude || 44.5175}`}
               />
             </div>
             <a
-              href="https://www.openstreetmap.org/?mlat=40.1840&mlon=44.5110#map=17/40.1840/44.5110"
+              href={`https://www.openstreetmap.org/?mlat=${footer.latitude || 40.1893}&mlon=${footer.longitude || 44.5175}#map=18/${footer.latitude || 40.1893}/${footer.longitude || 44.5175}`}
               target="_blank"
               rel="noreferrer"
               className="text-[10px] uppercase tracking-widest text-[hsl(32,87%,67%)] hover:text-[hsl(32,87%,80%)] mt-2 inline-block font-bold"

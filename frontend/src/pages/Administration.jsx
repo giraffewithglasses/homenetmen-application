@@ -9,7 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
-import { UserCheck, UserX, ShieldCheck, Archive, Trash2, ArchiveRestore } from "lucide-react";
+import { UserCheck, UserX, ShieldCheck, Archive, Trash2, ArchiveRestore, Globe, MapPin, Save, GripVertical } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 const ROLES = [
   "national_admin", "chapter_admin", "chapter_leader",
@@ -93,6 +96,7 @@ export default function Administration() {
           </TabsTrigger>
           <TabsTrigger value="users" className="rounded-full" data-testid="tab-users">Users</TabsTrigger>
           {user?.role === "national_admin" && <TabsTrigger value="audit" className="rounded-full" data-testid="tab-audit">Audit Log</TabsTrigger>}
+          {user?.role === "national_admin" && <TabsTrigger value="homepage" className="rounded-full" data-testid="tab-homepage">Homepage</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="pending">
@@ -244,7 +248,115 @@ export default function Administration() {
             </Card>
           </TabsContent>
         )}
+
+        {user?.role === "national_admin" && (
+          <TabsContent value="homepage">
+            <HomepageSettings/>
+          </TabsContent>
+        )}
       </Tabs>
+    </div>
+  );
+}
+
+function HomepageSettings() {
+  const [settings, setSettings] = useState(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    api.get("/public/homepage-settings").then(r => setSettings(r.data)).catch(() => {});
+  }, []);
+
+  if (!settings) return <Card className="clay-card p-6 mt-4">Loading…</Card>;
+
+  const updateFooter = (k, v) => setSettings(s => ({ ...s, footer: { ...s.footer, [k]: v } }));
+  const move = (idx, dir) => {
+    const order = [...settings.section_order];
+    const j = idx + dir;
+    if (j < 0 || j >= order.length) return;
+    [order[idx], order[j]] = [order[j], order[idx]];
+    setSettings({ ...settings, section_order: order });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put("/homepage-settings", { footer: settings.footer, section_order: settings.section_order });
+      toast.success("Homepage settings saved");
+    } catch { toast.error("Failed to save"); }
+    finally { setSaving(false); }
+  };
+
+  const LABELS = {
+    chapters: "Chapters", events: "Upcoming events", badges: "Badges",
+    newsletters: "Newsletters", leaders: "Leaders", galleries: "Galleries", resources: "Resources",
+  };
+
+  return (
+    <div className="grid md:grid-cols-2 gap-4 mt-4">
+      <Card className="clay-card p-6" data-testid="admin-footer-editor">
+        <div className="flex items-center gap-2 mb-4">
+          <Globe size={16} className="text-[hsl(12,65%,55%)]"/>
+          <h3 className="font-display font-bold text-lg">Footer & HQ info</h3>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <Label>Description (English)</Label>
+            <Textarea rows={3} value={settings.footer.description || ""} onChange={e => updateFooter("description", e.target.value)} data-testid="footer-desc-en"/>
+          </div>
+          <div>
+            <Label>Description (Armenian)</Label>
+            <Textarea rows={3} value={settings.footer.description_hy || ""} onChange={e => updateFooter("description_hy", e.target.value)} data-testid="footer-desc-hy"/>
+          </div>
+          <div>
+            <Label>HQ address</Label>
+            <Textarea rows={2} value={settings.footer.hq_address || ""} onChange={e => updateFooter("hq_address", e.target.value)} data-testid="footer-address"/>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Email</Label>
+              <Input value={settings.footer.hq_email || ""} onChange={e => updateFooter("hq_email", e.target.value)} data-testid="footer-email"/>
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input value={settings.footer.hq_phone || ""} onChange={e => updateFooter("hq_phone", e.target.value)} data-testid="footer-phone"/>
+            </div>
+          </div>
+          <div>
+            <Label className="flex items-center gap-1"><MapPin size={12}/> Map pin (latitude, longitude)</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Input type="number" step="any" value={settings.footer.latitude ?? ""} onChange={e => updateFooter("latitude", parseFloat(e.target.value))} data-testid="footer-lat"/>
+              <Input type="number" step="any" value={settings.footer.longitude ?? ""} onChange={e => updateFooter("longitude", parseFloat(e.target.value))} data-testid="footer-lng"/>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Yervand Kochar 17/6, Yerevan ≈ 40.1893, 44.5175</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="clay-card p-6" data-testid="admin-section-order">
+        <div className="flex items-center gap-2 mb-4">
+          <GripVertical size={16} className="text-[hsl(12,65%,55%)]"/>
+          <h3 className="font-display font-bold text-lg">Homepage section order</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">Reorder how sections appear to guests. Top = first.</p>
+        <div className="space-y-2">
+          {settings.section_order.map((k, i) => (
+            <div key={k} className="flex items-center gap-3 p-3 rounded-xl border border-border" data-testid={`section-row-${k}`}>
+              <GripVertical size={14} className="text-muted-foreground"/>
+              <div className="flex-1 font-semibold text-sm">{LABELS[k] || k}</div>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" onClick={() => move(i, -1)} disabled={i === 0} className="h-7 w-7 p-0" data-testid={`section-up-${k}`}>↑</Button>
+                <Button size="sm" variant="ghost" onClick={() => move(i, 1)} disabled={i === settings.section_order.length - 1} className="h-7 w-7 p-0" data-testid={`section-down-${k}`}>↓</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="md:col-span-2 flex justify-end">
+        <Button onClick={save} disabled={saving} className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid="save-homepage-settings">
+          <Save size={14} className="mr-2"/> {saving ? "Saving…" : "Save homepage settings"}
+        </Button>
+      </div>
     </div>
   );
 }
