@@ -262,6 +262,8 @@ class ProgramIn(BaseModel):
     related_badges: List[str] = []
     activities: List[dict] = []  # [{time, title, description}]
     cover: str = ""
+    fee: float = 0.0  # program fee in USD (0 = free)
+    currency: str = "usd"
 
 class AttendanceIn(BaseModel):
     program_id: str
@@ -395,6 +397,33 @@ async def public_resource_download(rid: str):
     r = await db.resources.find_one({"resource_id": rid, "archived": {"$ne": True}}, {"_id": 0})
     if not r: raise HTTPException(404, "Not found")
     return r
+
+@api.get("/public/members/{member_id}/verify")
+async def public_verify_member(member_id: str):
+    """Public membership verification endpoint used by printed QR codes."""
+    m = await db.members.find_one({"member_id": member_id}, {"_id": 0, "notes": 0, "guardian_phone": 0, "emergency_contact": 0, "phone": 0, "dob": 0})
+    if not m:
+        return {"valid": False, "reason": "not_found"}
+    valid = m.get("status") != "archived"
+    chapter = None
+    if m.get("chapter_id"):
+        c = await db.chapters.find_one({"chapter_id": m["chapter_id"], "archived": {"$ne": True}}, {"_id": 0, "name": 1, "location": 1})
+        chapter = c
+    return {
+        "valid": valid,
+        "member": {
+            "member_id": m["member_id"],
+            "full_name": m.get("full_name"),
+            "full_name_hy": m.get("full_name_hy"),
+            "section": m.get("section"),
+            "patrol": m.get("patrol"),
+            "position": m.get("position"),
+            "membership_start": m.get("membership_start"),
+            "status": m.get("status"),
+            "photo": m.get("photo"),
+        },
+        "chapter": chapter,
+    }
 
 # ---------- Auth Endpoints ----------
 @api.post("/auth/register")
@@ -638,11 +667,57 @@ async def update_chapter(chapter_id: str, payload: ChapterIn, user: dict = Depen
     c = await db.chapters.find_one({"chapter_id": chapter_id}, {"_id": 0})
     return c
 
+@api.get("/chapters/{chapter_id}/impact")
+async def chapter_delete_impact(chapter_id: str, user: dict = Depends(require_roles("national_admin"))):
+    """Preview what deleting a chapter will affect."""
+    c = await db.chapters.find_one({"chapter_id": chapter_id}, {"_id": 0})
+    if not c: raise HTTPException(404, "Chapter not found")
+    return {
+        "chapter": c,
+        "members_active": await db.members.count_documents({"chapter_id": chapter_id, "status": {"$ne": "archived"}}),
+        "members_archived": await db.members.count_documents({"chapter_id": chapter_id, "status": "archived"}),
+        "users": await db.users.count_documents({"chapter_id": chapter_id}),
+        "programs": await db.programs.count_documents({"chapter_id": chapter_id}),
+    }
+
 @api.delete("/chapters/{chapter_id}")
-async def delete_chapter(chapter_id: str, user: dict = Depends(require_roles("national_admin"))):
+async def delete_chapter(
+    chapter_id: str,
+    reassign_to: Optional[str] = None,
+    force: bool = False,
+    user: dict = Depends(require_roles("national_admin")),
+):
+    c = await db.chapters.find_one({"chapter_id": chapter_id})
+    if not c: raise HTTPException(404, "Chapter not found")
+    active_members = await db.members.count_documents({"chapter_id": chapter_id, "status": {"$ne": "archived"}})
+    linked_users = await db.users.count_documents({"chapter_id": chapter_id})
+    programs = await db.programs.count_documents({"chapter_id": chapter_id})
+    if (active_members or linked_users or programs) and not (reassign_to or force):
+        raise HTTPException(
+            409,
+            {
+                "message": "Chapter has linked records. Choose to reassign or force-orphan.",
+                "members_active": active_members,
+                "users": linked_users,
+                "programs": programs,
+            },
+        )
+    if reassign_to:
+        if reassign_to == chapter_id:
+            raise HTTPException(400, "Cannot reassign to the same chapter")
+        target = await db.chapters.find_one({"chapter_id": reassign_to})
+        if not target: raise HTTPException(400, "reassign_to chapter not found")
+        await db.members.update_many({"chapter_id": chapter_id}, {"$set": {"chapter_id": reassign_to}})
+        await db.users.update_many({"chapter_id": chapter_id}, {"$set": {"chapter_id": reassign_to}})
+        await db.programs.update_many({"chapter_id": chapter_id}, {"$set": {"chapter_id": reassign_to}})
+    elif force:
+        # Orphan: null out chapter_id references so nothing points at a dead id
+        await db.members.update_many({"chapter_id": chapter_id}, {"$set": {"chapter_id": None}})
+        await db.users.update_many({"chapter_id": chapter_id}, {"$set": {"chapter_id": None}})
+        await db.programs.update_many({"chapter_id": chapter_id}, {"$set": {"chapter_id": None}})
     await db.chapters.delete_one({"chapter_id": chapter_id})
-    await audit(user, "delete", "chapter", chapter_id)
-    return {"ok": True}
+    await audit(user, "delete", "chapter", chapter_id, {"reassign_to": reassign_to, "force": force})
+    return {"ok": True, "reassigned_to": reassign_to, "orphaned": force and not reassign_to}
 
 @api.post("/chapters/{chapter_id}/archive")
 async def archive_chapter(chapter_id: str, user: dict = Depends(require_roles("national_admin"))):
@@ -931,6 +1006,8 @@ async def my_registration(program_id: str, user: dict = Depends(get_current_user
 async def register_for_program(program_id: str, user: dict = Depends(get_current_user)):
     p = await db.programs.find_one({"program_id": program_id})
     if not p: raise HTTPException(404, "Program not found")
+    if float(p.get("fee") or 0.0) > 0:
+        raise HTTPException(402, "This program requires payment — use the checkout flow.")
     existing = await db.program_registrations.find_one({"program_id": program_id, "user_id": user["user_id"]})
     if existing:
         return {"status": existing["status"], "message": "Already registered"}
@@ -1582,6 +1659,12 @@ async def ensure_seed_users_present():
     """Idempotent: (re)create the documented seed users if any is missing."""
     admin_email = os.environ["ADMIN_EMAIL"]
     admin_password = os.environ["ADMIN_PASSWORD"]
+    # If ADMIN_EMAIL was changed, migrate the existing admin record to the new email.
+    old_admin = await db.users.find_one({"user_id": "usr_admin"})
+    if old_admin and old_admin.get("email") != admin_email:
+        # remove any user squatting on the target email (won't touch usr_admin itself)
+        await db.users.delete_many({"email": admin_email, "user_id": {"$ne": "usr_admin"}})
+        await db.users.update_one({"user_id": "usr_admin"}, {"$set": {"email": admin_email, "password_hash": hash_password(admin_password)}})
     users_seed = [
         {"user_id": "usr_admin", "email": admin_email, "name": "National Administrator",
          "password_hash": hash_password(admin_password), "role": "national_admin", "chapter_id": None},
@@ -1887,6 +1970,11 @@ async def on_stop():
     client.close()
 
 app.include_router(api)
+
+# Payment routes (Stripe)
+from payments import payments_router, register_payment_routes
+register_payment_routes(db, get_current_user, notify, audit, new_id)
+app.include_router(payments_router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, MapPin, Clock, Copy, CalendarDays, Trash2, Users, CheckCircle2 } from "lucide-react";
+import { Plus, MapPin, Clock, Copy, CalendarDays, Trash2, Users, CheckCircle2, DollarSign } from "lucide-react";
 
 const SECTIONS = ["Cubs", "Scouts", "Senior Scouts", "Rovers"];
 const LEADER_ROLES = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader"];
@@ -27,7 +27,7 @@ const emptyForm = {
   title: "", title_hy: "", description: "", date: "", start_time: "10:00",
   end_time: "13:00", location: "", section: "Scouts", sections: ["Scouts"],
   level: "chapter", expected_participants: 20, capacity: 0, waitlist_enabled: false,
-  materials: "", objectives: "", activities: [],
+  materials: "", objectives: "", activities: [], fee: 0, currency: "usd",
 };
 
 export default function Programs() {
@@ -71,6 +71,19 @@ export default function Programs() {
   };
   const register = async (p) => {
     try {
+      const fee = Number(p.fee || 0);
+      if (fee > 0) {
+        const { data } = await api.post("/payments/programs/checkout", {
+          program_id: p.program_id,
+          origin_url: window.location.origin,
+        });
+        if (data.checkout_url) {
+          window.location.href = data.checkout_url;
+        } else {
+          toast.error("Could not start checkout");
+        }
+        return;
+      }
       const { data } = await api.post(`/programs/${p.program_id}/register`);
       setMyRegs({ ...myRegs, [p.program_id]: data.status });
       if (data.status === "waitlisted") toast(`You're on the waitlist for ${p.title}`);
@@ -160,6 +173,15 @@ export default function Programs() {
                   </label>
                 </div>
 
+                <div className="col-span-2">
+                  <Label>Fee (USD — leave 0 for free events)</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-muted-foreground">$</span>
+                    <Input type="number" min="0" step="0.01" value={form.fee} onChange={e => setForm({...form, fee: Number(e.target.value)})} data-testid="prg-fee"/>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Scouts pay via Stripe checkout before their spot is confirmed.</p>
+                </div>
+
                 <div><Label>Expected participants</Label><Input type="number" value={form.expected_participants} onChange={e => setForm({...form, expected_participants: Number(e.target.value)})}/></div>
                 <div className="col-span-2"><Label>Materials</Label><Input value={form.materials} onChange={e => setForm({...form, materials: e.target.value})}/></div>
                 <div className="col-span-2"><Label>Objectives</Label><Textarea value={form.objectives} onChange={e => setForm({...form, objectives: e.target.value})}/></div>
@@ -205,6 +227,11 @@ export default function Programs() {
                       {p.waitlist_count > 0 && <span className="text-[hsl(32,87%,55%)]">· +{p.waitlist_count} waitlisted</span>}
                     </div>
                   )}
+                  {Number(p.fee) > 0 && (
+                    <div className="flex items-center gap-2 text-[hsl(12,65%,55%)] font-bold" data-testid={`prg-fee-${p.program_id}`}>
+                      <DollarSign size={12}/> ${Number(p.fee).toFixed(2)} {(p.currency || "usd").toUpperCase()}
+                    </div>
+                  )}
                 </div>
 
                 {user?.role === "scout" && (
@@ -223,7 +250,7 @@ export default function Programs() {
                     )}
                     {!mine && (
                       <Button size="sm" className="w-full btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" onClick={() => register(p)} disabled={full && !p.waitlist_enabled} data-testid={`prg-reg-${p.program_id}`}>
-                        {full ? (p.waitlist_enabled ? "Join waitlist" : "Full") : "Register"}
+                        {full ? (p.waitlist_enabled ? "Join waitlist" : "Full") : (Number(p.fee) > 0 ? `Pay $${Number(p.fee).toFixed(2)} & register` : "Register")}
                       </Button>
                     )}
                   </div>

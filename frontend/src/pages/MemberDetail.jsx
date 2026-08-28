@@ -4,7 +4,8 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Mail, Phone, Calendar, User, Shield } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, User, Shield, IdCard } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import BadgePatch from "@/components/BadgePatch";
 
 export default function MemberDetail() {
@@ -29,7 +30,7 @@ export default function MemberDetail() {
       <Card className="clay-card p-8">
         <div className="flex items-start gap-6">
           <div className="w-24 h-24 rounded-full bg-[hsl(12,65%,63%)]/20 text-[hsl(12,65%,63%)] flex items-center justify-center font-black text-4xl font-display">{m.full_name[0]}</div>
-          <div>
+          <div className="flex-1">
             <div className="uppercase-label">Scout profile</div>
             <h1 className="font-display text-4xl font-black">{m.full_name}</h1>
             <div className="text-muted-foreground">{m.full_name_hy}</div>
@@ -40,6 +41,11 @@ export default function MemberDetail() {
               <Badge variant={m.status === "active" ? "default" : "secondary"} className="rounded-full">{m.status}</Badge>
             </div>
           </div>
+          <Link to={`/members/${m.member_id}/card`}>
+            <Button className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid="open-membership-card-btn">
+              <IdCard size={14} className="mr-2"/> Membership card
+            </Button>
+          </Link>
         </div>
       </Card>
 

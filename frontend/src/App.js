@@ -26,6 +26,10 @@ import Profile from "@/pages/Profile";
 import Trash from "@/pages/Trash";
 import CompleteSignup from "@/pages/CompleteSignup";
 import Galleries from "@/pages/Galleries";
+import PaymentSuccess from "@/pages/PaymentSuccess";
+import PaymentCancel from "@/pages/PaymentCancel";
+import MembershipCard from "@/pages/MembershipCard";
+import VerifyMember from "@/pages/VerifyMember";
 import "@/App.css";
 
 function Router() {
@@ -36,6 +40,9 @@ function Router() {
       <Route path="/" element={<Guest />} />
       <Route path="/login" element={<Login />} />
       <Route path="/complete-signup" element={<CompleteSignup />} />
+      <Route path="/payment/success" element={<PaymentSuccess />} />
+      <Route path="/payment/cancel" element={<PaymentCancel />} />
+      <Route path="/verify/:id" element={<VerifyMember />} />
       <Route element={<Layout />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/announcements" element={<Announcements />} />
@@ -44,6 +51,7 @@ function Router() {
         <Route path="/chapters/:id" element={<ChapterDetail />} />
         <Route path="/members" element={<Members />} />
         <Route path="/members/:id" element={<MemberDetail />} />
+        <Route path="/members/:id/card" element={<MembershipCard />} />
         <Route path="/programs" element={<Programs />} />
         <Route path="/programs/:id" element={<ProgramDetail />} />
         <Route path="/calendar" element={<CalendarPage />} />

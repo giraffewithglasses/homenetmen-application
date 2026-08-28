@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 5 testing (backend + frontend) of digital membership card/public verify, Stripe program payments, and cascade chapter delete. Backend: 25 new pytest cases in /app/backend/tests/test_iter5_card_payments_cascade.py — all 25 passed (public verify valid/not_found/archived + sensitive-field exclusion, program fee persistence, 402 block on paid direct register, Stripe checkout URL/session_id + payment_transactions initiated/pending, free-program 400, unauth 401/403, unknown program 404, unknown session 404, chapter impact + RBAC 403/404, DELETE 409 payload, reassign_to migration of members/users/programs, force-orphan nulling chapter_id, reassign_to==self 400, reassign_to nonexistent 400, empty-chapter delete 200, non-national-admin 403, owner-admin email migration to hovsepmarachlian@gmail.com and old admin@scouts.am now rejected). Frontend: /verify/mbr_narek shows 'Active member' card with chapter/section/patrol; /verify/mbr_bogus shows 'Not a current member'; /members/mbr_narek/card renders membership-card with SVG QR pointing at /verify/mbr_narek and working print button; scout /programs shows 'Pay $30.00 & register' + $30.00 USD fee badge and clicking it redirects to https://checkout.stripe.com/c/pay/cs_test_...; /payment/cancel renders cancel card; /trash purge on a chapter with links opens cascade-dialog with counts (1 members/0 users/1 programs), target select, reassign and force buttons — force-orphan deleted the chapter and showed 'Chapter deleted (records orphaned)'. No blocking defects found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/payments/status/{session_id}", "issue": "Unknown session returns 404 which the frontend treats as a transient error and polls 12x2s (~24s) before showing a state; consider a distinct 'not_found' response so the UI can fail fast."},
+      {"endpoint": "DELETE /api/members/{id}", "issue": "Members are only archived (soft delete) with no hard-purge route, so test/orphan member rows accumulate in Trash (6 archived members currently). Not new to iteration 5."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Login.jsx demo hint", "issue": "Demo credential line still reads 'admin@scouts.am / admin123' but that account was renamed to hovsepmarachlian@gmail.com and now returns 401 — misleading for users/testers.", "selector": "login page demo text", "priority": "MEDIUM"},
+      {"component": "PaymentSuccess.jsx", "issue": "Hard-error/timeout state uses a spinner icon and copy 'Still processing…' even when the session id is bogus (status 404 forever); a real failure state (XCircle + 'We couldn't find this payment') would be clearer. Takes ~24s to appear.", "selector": "[data-testid=\"payment-status-card\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Programs (scout view)", "issues": ["Program cards showed empty time/location placeholders ('–' and blank pin) for programs created without those fields — consider hiding empty rows", "Before cleanup the list was polluted with 16 leftover TEST_Program artifacts from previous iterations (now purged by this agent)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter5_card_payments_cascade.py",
+    "/app/backend/tests/_iter5_seed_ui.py",
+    "/app/test_reports/pytest/iter5.xml"
+  ],
+  "action_items": [
+    "Update the Login page demo credential hint to hovsepmarachlian@gmail.com / admin123 (admin@scouts.am no longer exists).",
+    "Optional: differentiate 'transaction not found' from transient polling errors on /payment/success so the UI shows a real failure state quickly."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1985 lines — split into routers (chapters/members/programs/admin) per the 700-line guideline.",
+    "payments.py get_payment_status swallows all Stripe exceptions with a bare `except Exception: pass` — log the error so webhook-fallback failures are diagnosable.",
+    "DELETE /api/chapters cascade performs 4 sequential update/delete operations without a transaction; a mid-way failure leaves records reassigned but the chapter alive. Consider ordering deletion last (already the case) and logging partial state.",
+    "POST /api/payments/programs/checkout trusts client-supplied origin_url for success/cancel URLs; validate it against an allow-list to avoid open-redirect style abuse."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter5_card_payments_cascade.py",
+    "/app/backend/tests/_iter5_seed_ui.py",
+    "/app/memory/test_credentials.md"
+  ],
+  "success_rate": {"backend": "100% (25/25)", "frontend": "100% of iteration-5 flows verified"},
+  "seed_data_creation": "Created and then removed: TEST_UI Paid Camp program (fee 30 USD), TEST_UI Cascade Chapter (archived) with 1 member + 1 program, plus in-test TEST_ chapters/programs/members. Also purged 16 stale TEST_Program records and 8 TEST_ members left by earlier iterations. Note: deleted members are archived (soft) and still appear in Trash > Members.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "hovsepmarachlian@gmail.com/admin123 (national_admin), narek@scouts.am/scout123 (scout), ararat.leader@scouts.am/scout123 (chapter_admin). /app/memory/test_credentials.md was stale and has been updated with the new owner email.",
+  "context_for_next_testing_agent": "Iteration 5 backend suite lives at /app/backend/tests/test_iter5_card_payments_cascade.py (all green, safe to re-run; it self-cleans). Use /app/backend/tests/_iter5_seed_ui.py create|cleanup to seed/purge UI fixtures (paid program + archived chapter with links) — it also purges any TEST_ prefixed programs/chapters/members. Stripe checkout was verified only up to the redirect URL (no card submitted), so no 'paid' transaction exists; payment_status='paid' path and the webhook route remain untested. Trash > Members still holds archived TEST_ members (no hard-delete endpoint).",
+  "rca_of_the_issue": "No functional defect reproduced. The only user-visible inconsistency is stale demo credential copy on the Login page (hardcoded 'admin@scouts.am') left behind by the ADMIN_EMAIL migration in ensure_seed_users_present()."
+}

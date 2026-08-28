@@ -139,7 +139,7 @@ export default function Login() {
                 </Button>
               </form>
               <div className="text-xs text-muted-foreground mt-4">
-                Demo: <b>admin@scouts.am</b> / <b>admin123</b> · <b>narek@scouts.am</b> / <b>scout123</b>
+                Demo: <b>hovsepmarachlian@gmail.com</b> / <b>admin123</b> · <b>narek@scouts.am</b> / <b>scout123</b>
               </div>
             </TabsContent>
 
