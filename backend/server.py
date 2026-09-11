@@ -1081,8 +1081,33 @@ async def list_badge_requests(user: dict = Depends(get_current_user)):
         out.append(r)
     return out
 
+@api.get("/badges/requests/count")
+async def count_badge_requests(user: dict = Depends(get_current_user)):
+    """Lightweight count of pending badge requests visible to this leader/admin."""
+    if not is_leader(user["role"]):
+        return {"count": 0}
+    if user["role"] == "national_admin":
+        n = await db.member_badges.count_documents({"status": "requested"})
+        return {"count": n}
+    # chapter-scoped: only count requests from members in this chapter
+    member_ids = [m["member_id"] for m in await db.members.find(
+        {"chapter_id": user.get("chapter_id")}, {"member_id": 1}
+    ).to_list(2000)]
+    if not member_ids:
+        return {"count": 0}
+    n = await db.member_badges.count_documents({"status": "requested", "member_id": {"$in": member_ids}})
+    return {"count": n}
+
+class BadgeDecisionIn(BaseModel):
+    note: Optional[str] = ""
+
 @api.post("/badges/requests/{mb_id}/approve")
-async def approve_badge_request(mb_id: str, mode: str = "in_progress", user: dict = Depends(get_current_user)):
+async def approve_badge_request(
+    mb_id: str,
+    mode: str = "in_progress",
+    payload: Optional[BadgeDecisionIn] = None,
+    user: dict = Depends(get_current_user),
+):
     """Approve a scout's badge request. mode: 'in_progress' (scout starts working) or 'awarded' (award immediately)."""
     if not is_leader(user["role"]):
         raise HTTPException(403, "Not allowed")
@@ -1095,7 +1120,8 @@ async def approve_badge_request(mb_id: str, mode: str = "in_progress", user: dic
     badge = await db.badges.find_one({"badge_id": mb["badge_id"]})
     total = len(badge.get("requirements", [])) if badge else 0
     mode_norm = "awarded" if mode == "awarded" else "in_progress"
-    update = {"status": mode_norm, "assigned_by": user["email"], "assigned_at": now_iso()}
+    note = (payload.note if payload else "") or ""
+    update = {"status": mode_norm, "assigned_by": user["email"], "assigned_at": now_iso(), "leader_note": note}
     if mode_norm == "awarded":
         update.update({
             "awarded": True,
@@ -1106,15 +1132,24 @@ async def approve_badge_request(mb_id: str, mode: str = "in_progress", user: dic
     await db.member_badges.update_one({"mb_id": mb_id}, {"$set": update})
     linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
     if linked:
+        b_name = badge.get("name") if badge else "your badge"
         if mode_norm == "awarded":
-            await notify([linked["user_id"]], "Badge awarded!", f"You've earned '{badge.get('name') if badge else 'a badge'}' — congrats!", "success", "/my-progress")
+            msg = f"You've earned '{b_name}' — congrats!"
+            if note: msg += f"\n\nFrom your leader: “{note}”"
+            await notify([linked["user_id"]], "Badge awarded!", msg, "success", "/my-progress")
         else:
-            await notify([linked["user_id"]], "Badge request approved", f"You can start working on '{badge.get('name') if badge else 'your badge'}'", "success", "/my-progress")
-    await audit(user, f"approve_{mode_norm}", "badge_request", mb["badge_id"], {"member": mb["member_id"]})
+            msg = f"You can start working on '{b_name}'"
+            if note: msg += f"\n\nFrom your leader: “{note}”"
+            await notify([linked["user_id"]], "Badge request approved", msg, "success", "/my-progress")
+    await audit(user, f"approve_{mode_norm}", "badge_request", mb["badge_id"], {"member": mb["member_id"], "note": bool(note)})
     return {"ok": True, "status": mode_norm}
 
 @api.post("/badges/requests/{mb_id}/deny")
-async def deny_badge_request(mb_id: str, user: dict = Depends(get_current_user)):
+async def deny_badge_request(
+    mb_id: str,
+    payload: Optional[BadgeDecisionIn] = None,
+    user: dict = Depends(get_current_user),
+):
     if not is_leader(user["role"]):
         raise HTTPException(403, "Not allowed")
     mb = await db.member_badges.find_one({"mb_id": mb_id})
@@ -1124,12 +1159,88 @@ async def deny_badge_request(mb_id: str, user: dict = Depends(get_current_user))
     if not m: raise HTTPException(404, "Member not found")
     _member_chapter_guard(user, m["chapter_id"])
     await db.member_badges.delete_one({"mb_id": mb_id})
+    note = (payload.note if payload else "") or ""
     linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
     if linked:
         badge = await db.badges.find_one({"badge_id": mb["badge_id"]}, {"name": 1})
-        await notify([linked["user_id"]], "Badge request declined", f"Your request for '{badge.get('name') if badge else 'the badge'}' wasn't approved this time. Talk to your leader.", "warning", "/my-progress")
-    await audit(user, "deny", "badge_request", mb["badge_id"], {"member": mb["member_id"]})
+        b_name = badge.get("name") if badge else "the badge"
+        msg = f"Your request for '{b_name}' wasn't approved this time."
+        if note:
+            msg += f"\n\nFrom your leader: “{note}”"
+        else:
+            msg += " Talk to your leader."
+        await notify([linked["user_id"]], "Badge request declined", msg, "warning", "/my-progress")
+    await audit(user, "deny", "badge_request", mb["badge_id"], {"member": mb["member_id"], "note": bool(note)})
     return {"ok": True}
+
+class BadgeBulkDecisionIn(BaseModel):
+    mb_ids: List[str]
+    action: str  # "approve" | "deny"
+    mode: str = "in_progress"  # only for approve
+    note: Optional[str] = ""
+
+@api.post("/badges/requests/bulk")
+async def bulk_decide_badge_requests(payload: BadgeBulkDecisionIn, user: dict = Depends(get_current_user)):
+    """Approve or deny many badge requests at once. Returns per-request outcome."""
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Not allowed")
+    if payload.action not in ("approve", "deny"):
+        raise HTTPException(400, "action must be 'approve' or 'deny'")
+    ids = list({i for i in (payload.mb_ids or []) if i})
+    if not ids:
+        return {"ok": True, "processed": 0, "results": []}
+    mode_norm = "awarded" if payload.mode == "awarded" else "in_progress"
+    note = payload.note or ""
+    results = []
+    processed = 0
+    for mb_id in ids:
+        try:
+            mb = await db.member_badges.find_one({"mb_id": mb_id})
+            if not mb or mb.get("status") != "requested":
+                results.append({"mb_id": mb_id, "ok": False, "reason": "not_pending"}); continue
+            m = await db.members.find_one({"member_id": mb["member_id"]})
+            if not m:
+                results.append({"mb_id": mb_id, "ok": False, "reason": "member_missing"}); continue
+            # chapter guard (skip silently for out-of-chapter requests)
+            if user["role"] != "national_admin" and user.get("chapter_id") != m.get("chapter_id"):
+                results.append({"mb_id": mb_id, "ok": False, "reason": "forbidden"}); continue
+            badge = await db.badges.find_one({"badge_id": mb["badge_id"]})
+            total = len(badge.get("requirements", [])) if badge else 0
+            linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
+            b_name = badge.get("name") if badge else "your badge"
+            if payload.action == "approve":
+                update = {"status": mode_norm, "assigned_by": user["email"], "assigned_at": now_iso(), "leader_note": note}
+                if mode_norm == "awarded":
+                    update.update({
+                        "awarded": True,
+                        "awarded_at": now_iso(),
+                        "awarded_by": user["email"],
+                        "completed_requirements": [True] * total,
+                    })
+                await db.member_badges.update_one({"mb_id": mb_id}, {"$set": update})
+                if linked:
+                    if mode_norm == "awarded":
+                        msg = f"You've earned '{b_name}' — congrats!"
+                    else:
+                        msg = f"You can start working on '{b_name}'"
+                    if note: msg += f"\n\nFrom your leader: “{note}”"
+                    title = "Badge awarded!" if mode_norm == "awarded" else "Badge request approved"
+                    kind = "success"
+                    await notify([linked["user_id"]], title, msg, kind, "/my-progress")
+                await audit(user, f"approve_{mode_norm}", "badge_request", mb["badge_id"], {"member": mb["member_id"], "bulk": True, "note": bool(note)})
+            else:  # deny
+                await db.member_badges.delete_one({"mb_id": mb_id})
+                if linked:
+                    msg = f"Your request for '{b_name}' wasn't approved this time."
+                    if note: msg += f"\n\nFrom your leader: “{note}”"
+                    else: msg += " Talk to your leader."
+                    await notify([linked["user_id"]], "Badge request declined", msg, "warning", "/my-progress")
+                await audit(user, "deny", "badge_request", mb["badge_id"], {"member": mb["member_id"], "bulk": True, "note": bool(note)})
+            processed += 1
+            results.append({"mb_id": mb_id, "ok": True})
+        except Exception as e:
+            results.append({"mb_id": mb_id, "ok": False, "reason": str(e)[:80]})
+    return {"ok": True, "processed": processed, "results": results}
 
 @api.post("/badges/progress")
 async def update_progress(payload: RequirementUpdate, user: dict = Depends(get_current_user)):

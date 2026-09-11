@@ -44,6 +44,11 @@ Build a modern responsive scouting platform for HOMENETMEN HASK (Est. 1989). Cen
 - **[2026-02-28] Program Registrants Excel download** on Programs page (leaders + admins): `GET /api/programs/{id}/registrations` now enriches with full member details (phone, email, DOB, patrol, guardians, emergency contact, paid status, registered_at). Chapter scoped for chapter leaders.
 - **[2026-02-28] Badge Approval Workflow** — Leaders/admins can now Approve to start (in_progress), Award now (immediate award with all requirements marked complete), or Deny pending badge requests. `POST /api/badges/requests/{mb_id}/approve?mode=in_progress|awarded`.
 - **[2026-02-28] Code-review pass** — Added error logs to previously-silent catch blocks in `AuthContext.jsx`, `Members.jsx`, `Programs.jsx`, `Guest.jsx`. Fixed index-as-key in Finance category chart to use `${kind}-${category}` composite key.
+- **[2026-02-28] Attention badges + Approval notes + Bulk actions** —
+  - New `GET /api/badges/requests/count` (leaders only, chapter-scoped) drives a red count pill next to "Progress Badges" in the sidebar; polls every 60s, on window focus, and via `badge-requests-changed` CustomEvent dispatched after any decision.
+  - `POST /api/badges/requests/{mb_id}/approve` and `/deny` now accept an optional JSON body `{note}` — the note is appended to the scout's notification as "From your leader: …".
+  - New `POST /api/badges/requests/bulk` with `{mb_ids, action, mode, note}` processes many at once; silently skips out-of-chapter with per-id reasons.
+  - Badges page pending-requests card gains a Select-all checkbox, per-row checkboxes, a highlighted bulk action bar (Approve to start / Award now / Deny / Clear), and a unified decision dialog with optional coaching note (400-char cap) that both the individual and bulk flows use.
 
 ## Backlog
 

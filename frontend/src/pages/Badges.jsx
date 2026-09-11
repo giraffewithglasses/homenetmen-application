@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { Plus, Archive, ArchiveRestore, CheckCircle2, XCircle, Clock, Pencil, Award } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import BadgePatch from "@/components/BadgePatch";
 
 const LEADER_ROLES = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader"];
@@ -32,6 +33,10 @@ export default function Badges() {
   const [showArchived, setShowArchived] = useState(false);
   const [requests, setRequests] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [selectedReqs, setSelectedReqs] = useState(new Set());
+  const [decision, setDecision] = useState(null); // { ids: [], action: 'approve'|'deny', mode?: 'in_progress'|'awarded' }
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const emptyForm = () => ({
     name: "", name_hy: "", icon: "star", icon_image: "", color: "#2D6A4F", description: "",
@@ -44,21 +49,62 @@ export default function Badges() {
   const load = () => api.get(`/badges?include_archived=${showArchived}`).then(r => setBadges(r.data));
   const loadRequests = () => {
     if (!isLeader) return;
-    api.get("/badges/requests").then(r => setRequests(r.data)).catch(() => setRequests([]));
+    api.get("/badges/requests")
+      .then(r => { setRequests(r.data); setSelectedReqs(new Set()); })
+      .catch(() => setRequests([]));
   };
   useEffect(() => { load(); loadRequests(); /* eslint-disable-next-line */ }, [showArchived, user?.role]);
 
-  const decideRequest = async (mb_id, mode, extra = {}) => {
+  const notifySidebar = () => {
+    try { window.dispatchEvent(new CustomEvent("badge-requests-changed")); } catch (err) { /* noop */ }
+  };
+
+  const toggleOne = (mb_id, checked) => {
+    const n = new Set(selectedReqs);
+    if (checked) n.add(mb_id); else n.delete(mb_id);
+    setSelectedReqs(n);
+  };
+  const toggleAllReqs = (checked) => {
+    if (checked) setSelectedReqs(new Set(requests.map(r => r.mb_id)));
+    else setSelectedReqs(new Set());
+  };
+
+  const openDecision = (ids, action, mode) => {
+    setDecision({ ids, action, mode });
+    setNote("");
+  };
+  const closeDecision = () => { setDecision(null); setNote(""); };
+
+  const submitDecision = async () => {
+    if (!decision) return;
+    setSubmitting(true);
     try {
-      const params = mode === "approve" && extra.awardMode ? `?mode=${extra.awardMode}` : "";
-      await api.post(`/badges/requests/${mb_id}/${mode}${params}`);
-      if (mode === "approve") {
-        toast.success(extra.awardMode === "awarded" ? "Badge awarded to scout" : "Request approved — scout can start");
+      const { ids, action, mode } = decision;
+      const trimmed = note.trim();
+      if (ids.length === 1) {
+        const mb_id = ids[0];
+        const params = action === "approve" ? `?mode=${mode || "in_progress"}` : "";
+        await api.post(`/badges/requests/${mb_id}/${action}${params}`, { note: trimmed });
+        toast.success(action === "approve"
+          ? (mode === "awarded" ? "Badge awarded" : "Request approved — scout can start")
+          : "Request declined");
       } else {
-        toast.success("Request declined");
+        const { data } = await api.post(`/badges/requests/bulk`, {
+          mb_ids: ids, action, mode: mode || "in_progress", note: trimmed,
+        });
+        const ok = data?.processed || 0;
+        const fail = ids.length - ok;
+        if (fail === 0) toast.success(`${ok} request${ok === 1 ? "" : "s"} processed`);
+        else toast(`Processed ${ok}, skipped ${fail}`, { description: "Some entries were no longer pending or out of your chapter." });
       }
       loadRequests();
-    } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
+      notifySidebar();
+      closeDecision();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const save = async () => {
@@ -202,26 +248,58 @@ export default function Badges() {
 
       {isLeader && requests.length > 0 && (
         <Card className="clay-card p-6 border-l-4 border-l-[hsl(32,87%,55%)]" data-testid="badge-requests-card">
-          <div className="flex items-center gap-2 mb-4">
-            <Clock size={18} className="text-[hsl(32,87%,55%)]"/>
-            <h3 className="font-display font-bold text-xl">Pending badge requests <span className="text-muted-foreground font-normal">({requests.length})</span></h3>
+          <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Clock size={18} className="text-[hsl(32,87%,55%)]"/>
+              <h3 className="font-display font-bold text-xl">Pending badge requests <span className="text-muted-foreground font-normal">({requests.length})</span></h3>
+            </div>
+            <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold cursor-pointer select-none">
+              <Checkbox
+                checked={selectedReqs.size > 0 && selectedReqs.size === requests.length}
+                onCheckedChange={toggleAllReqs}
+                data-testid="badge-requests-select-all"
+              />
+              Select all
+            </label>
           </div>
+
+          {selectedReqs.size > 0 && (
+            <div className="mb-4 p-3 rounded-xl bg-[hsl(32,87%,55%)]/10 border border-[hsl(32,87%,55%)]/40 flex flex-wrap items-center gap-2" data-testid="badge-requests-bulk-bar">
+              <span className="text-sm font-bold mr-2">{selectedReqs.size} selected</span>
+              <Button size="sm" onClick={() => openDecision(Array.from(selectedReqs), "approve", "in_progress")} className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid="bulk-approve-start">
+                <CheckCircle2 size={12} className="mr-1"/> Approve to start
+              </Button>
+              <Button size="sm" onClick={() => openDecision(Array.from(selectedReqs), "approve", "awarded")} className="btn-pill bg-[hsl(32,87%,55%)] hover:bg-[hsl(32,87%,45%)] text-[hsl(155,60%,8%)]" data-testid="bulk-award">
+                <Award size={12} className="mr-1"/> Award now
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => openDecision(Array.from(selectedReqs), "deny")} className="btn-pill text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" data-testid="bulk-deny">
+                <XCircle size={12} className="mr-1"/> Deny
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedReqs(new Set())} className="btn-pill ml-auto" data-testid="bulk-clear">Clear</Button>
+            </div>
+          )}
+
           <div className="space-y-3">
             {requests.map(r => (
-              <div key={r.mb_id} className="flex items-center gap-4 p-3 rounded-xl border border-border" data-testid={`badge-request-${r.mb_id}`}>
+              <div key={r.mb_id} className="flex items-center gap-3 p-3 rounded-xl border border-border" data-testid={`badge-request-${r.mb_id}`}>
+                <Checkbox
+                  checked={selectedReqs.has(r.mb_id)}
+                  onCheckedChange={(v) => toggleOne(r.mb_id, !!v)}
+                  data-testid={`badge-request-check-${r.mb_id}`}
+                />
                 <BadgePatch badge={r.badge} awarded size={48}/>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">{r.member?.full_name || "Unknown scout"}</div>
                   <div className="text-xs text-muted-foreground truncate">wants to start <b>{r.badge?.name}</b> · {r.member?.section}</div>
                 </div>
                 <div className="flex flex-wrap gap-2 flex-shrink-0 justify-end">
-                  <Button size="sm" onClick={() => decideRequest(r.mb_id, "approve", { awardMode: "in_progress" })} className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid={`badge-request-approve-${r.mb_id}`}>
+                  <Button size="sm" onClick={() => openDecision([r.mb_id], "approve", "in_progress")} className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid={`badge-request-approve-${r.mb_id}`}>
                     <CheckCircle2 size={12} className="mr-1"/> Approve to start
                   </Button>
-                  <Button size="sm" onClick={() => { if (window.confirm(`Award '${r.badge?.name}' to ${r.member?.full_name || "this scout"} now? This marks all requirements complete.`)) decideRequest(r.mb_id, "approve", { awardMode: "awarded" }); }} className="btn-pill bg-[hsl(32,87%,55%)] hover:bg-[hsl(32,87%,45%)] text-[hsl(155,60%,8%)]" data-testid={`badge-request-award-${r.mb_id}`}>
+                  <Button size="sm" onClick={() => openDecision([r.mb_id], "approve", "awarded")} className="btn-pill bg-[hsl(32,87%,55%)] hover:bg-[hsl(32,87%,45%)] text-[hsl(155,60%,8%)]" data-testid={`badge-request-award-${r.mb_id}`}>
                     <Award size={12} className="mr-1"/> Award now
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => decideRequest(r.mb_id, "deny")} className="btn-pill text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" data-testid={`badge-request-deny-${r.mb_id}`}>
+                  <Button size="sm" variant="ghost" onClick={() => openDecision([r.mb_id], "deny")} className="btn-pill text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" data-testid={`badge-request-deny-${r.mb_id}`}>
                     <XCircle size={12} className="mr-1"/> Deny
                   </Button>
                 </div>
@@ -230,6 +308,80 @@ export default function Badges() {
           </div>
         </Card>
       )}
+
+      {/* Approve/Deny confirmation with optional coaching note */}
+      <Dialog open={!!decision} onOpenChange={(o) => !o && closeDecision()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle data-testid="badge-decision-title">
+              {decision?.action === "deny"
+                ? `Deny ${decision.ids.length} badge request${decision.ids.length === 1 ? "" : "s"}`
+                : decision?.mode === "awarded"
+                  ? `Award badge${decision.ids.length === 1 ? "" : "s"} now (${decision.ids.length})`
+                  : `Approve ${decision?.ids.length} request${decision?.ids.length === 1 ? "" : "s"} to start`}
+            </DialogTitle>
+          </DialogHeader>
+          {decision && (
+            <div className="space-y-3">
+              {decision.action === "approve" && decision.mode === "awarded" && (
+                <p className="text-sm text-muted-foreground">
+                  This marks every requirement complete and awards the badge immediately. The scout will get a congratulations notification.
+                </p>
+              )}
+              {decision.action === "approve" && decision.mode === "in_progress" && (
+                <p className="text-sm text-muted-foreground">
+                  The scout will be able to start working through the requirements. You can mark them off later.
+                </p>
+              )}
+              {decision.action === "deny" && (
+                <p className="text-sm text-muted-foreground">
+                  The request will be removed and the scout will be notified. A note is a good way to coach them.
+                </p>
+              )}
+              {decision.ids.length > 1 && (
+                <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-2">
+                  Same note (if any) will be sent to all {decision.ids.length} scouts.
+                </div>
+              )}
+              <div>
+                <Label>Note to scout <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Textarea
+                  rows={3}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder={decision.action === "deny"
+                    ? "e.g. Great effort — let's revisit after First Aid camp in July."
+                    : "e.g. Nice initiative — start with the woodwork item this week."}
+                  maxLength={400}
+                  data-testid="badge-decision-note"
+                />
+                <div className="text-[10px] text-muted-foreground mt-1 text-right">{note.length}/400</div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="ghost" onClick={closeDecision} disabled={submitting} data-testid="badge-decision-cancel">Cancel</Button>
+                <Button
+                  onClick={submitDecision}
+                  disabled={submitting}
+                  className={`btn-pill ${
+                    decision.action === "deny"
+                      ? "bg-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,45%)]"
+                      : decision.mode === "awarded"
+                        ? "bg-[hsl(32,87%,55%)] hover:bg-[hsl(32,87%,45%)] text-[hsl(155,60%,8%)]"
+                        : "bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]"
+                  }`}
+                  data-testid="badge-decision-confirm"
+                >
+                  {submitting ? "Working…" : (
+                    decision.action === "deny" ? "Deny & notify"
+                      : decision.mode === "awarded" ? "Award now"
+                      : "Approve"
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(b => (

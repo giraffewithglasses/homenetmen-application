@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate, Link } from "react-router-dom";
 import {
   LayoutDashboard, Newspaper, Mail, Building2, Compass, CalendarDays,
@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 
 const ALL_ROLES = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader", "scout", "parent"];
 const LEADER_TIER = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader"];
@@ -36,8 +37,39 @@ export default function Sidebar({ mobileOpen, setMobileOpen, lang }) {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const items = ALL_ITEMS.filter((i) => i.roles.includes(user?.role));
+  const isLeader = user?.role && LEADER_TIER.includes(user.role);
+  const [pendingBadgeRequests, setPendingBadgeRequests] = useState(0);
+
+  useEffect(() => {
+    if (!isLeader) { setPendingBadgeRequests(0); return; }
+    let alive = true;
+    const fetchCount = async () => {
+      try {
+        const { data } = await api.get("/badges/requests/count");
+        if (alive) setPendingBadgeRequests(data?.count || 0);
+      } catch (err) {
+        if (alive) console.warn("badge request count failed:", err?.message);
+      }
+    };
+    fetchCount();
+    const id = setInterval(fetchCount, 60000);
+    const onFocus = () => fetchCount();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("badge-requests-changed", fetchCount);
+    return () => {
+      alive = false;
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("badge-requests-changed", fetchCount);
+    };
+  }, [isLeader]);
 
   const doLogout = async () => { await logout(); nav("/login"); };
+
+  const badgeFor = (to) => {
+    if (to === "/badges" && pendingBadgeRequests > 0) return pendingBadgeRequests;
+    return 0;
+  };
 
   return (
     <>
@@ -65,19 +97,32 @@ export default function Sidebar({ mobileOpen, setMobileOpen, lang }) {
           </div>
 
           <nav className="flex-1 overflow-y-auto px-4 space-y-1 pb-6">
-            {items.map((it) => (
-              <NavLink
-                key={it.to}
-                to={it.to}
-                end={it.to === "/dashboard"}
-                onClick={() => setMobileOpen(false)}
-                className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
-                data-testid={`nav-${it.label.toLowerCase().replace(/\s/g, "-")}`}
-              >
-                <it.icon size={18} strokeWidth={2.2} />
-                <span className="text-sm font-medium">{lang === "hy" ? it.labelHy : it.label}</span>
-              </NavLink>
-            ))}
+            {items.map((it) => {
+              const count = badgeFor(it.to);
+              return (
+                <NavLink
+                  key={it.to}
+                  to={it.to}
+                  end={it.to === "/dashboard"}
+                  onClick={() => setMobileOpen(false)}
+                  className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+                  data-testid={`nav-${it.label.toLowerCase().replace(/\s/g, "-")}`}
+                >
+                  <it.icon size={18} strokeWidth={2.2} />
+                  <span className="text-sm font-medium flex-1">{lang === "hy" ? it.labelHy : it.label}</span>
+                  {count > 0 && (
+                    <span
+                      className="ml-auto inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold text-white shadow-sm"
+                      style={{ background: "hsl(0 72% 55%)" }}
+                      data-testid={`nav-badge-count-${it.to.replace(/\//g, "-")}`}
+                      title={`${count} pending badge request${count === 1 ? "" : "s"}`}
+                    >
+                      {count > 99 ? "99+" : count}
+                    </span>
+                  )}
+                </NavLink>
+              );
+            })}
           </nav>
 
           <div className="px-4 pb-6">
