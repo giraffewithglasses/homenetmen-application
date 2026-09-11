@@ -267,7 +267,7 @@ export default function Finance() {
                       const pct = max ? (c.total / max) * 100 : 0;
                       const color = c.kind === "income" ? "hsl(149,40%,30%)" : "hsl(0,65%,55%)";
                       return (
-                        <div key={i}>
+                        <div key={`${c.kind}-${c.category}`}>
                           <div className="flex justify-between text-sm mb-1">
                             <span className="flex items-center gap-2">
                               {c.kind === "income" ? <TrendingUp size={12} className="text-[hsl(149,40%,30%)]"/> : <TrendingDown size={12} className="text-[hsl(0,65%,55%)]"/>}

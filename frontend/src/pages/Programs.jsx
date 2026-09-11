@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, MapPin, Clock, Copy, CalendarDays, Trash2, Users, CheckCircle2, DollarSign } from "lucide-react";
+import { Plus, MapPin, Clock, Copy, CalendarDays, Trash2, Users, CheckCircle2, DollarSign, Download } from "lucide-react";
 
 const SECTIONS = ["Cubs", "Scouts", "Senior Scouts", "Rovers"];
 const LEADER_ROLES = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader"];
@@ -46,7 +46,7 @@ export default function Programs() {
         try {
           const r = await api.get(`/programs/${p.program_id}/my-registration`);
           if (r.data.status && r.data.status !== "none") map[p.program_id] = r.data.status;
-        } catch {}
+        } catch (err) { console.warn(`my-registration lookup failed for ${p.program_id}:`, err?.message); }
       }));
       setMyRegs(map);
     }
@@ -68,6 +68,52 @@ export default function Programs() {
     if (!window.confirm("Delete this program?")) return;
     try { await api.delete(`/programs/${id}`); toast.success("Deleted"); load(); }
     catch { toast.error("Failed"); }
+  };
+  const downloadRegistrants = async (p) => {
+    try {
+      const { data } = await api.get(`/programs/${p.program_id}/registrations`);
+      if (!data || data.length === 0) {
+        toast("No registrations yet for this program");
+        return;
+      }
+      const XLSX = await import("xlsx");
+      const headers = [
+        "full_name", "full_name_hy", "email", "phone", "dob", "gender",
+        "section", "patrol", "position", "chapter_name",
+        "guardian_name", "guardian_phone", "parent_email", "emergency_contact",
+        "membership_start", "registration_status", "paid", "registered_at",
+      ];
+      const rows = data.map(r => ({
+        full_name: r.member?.full_name || "",
+        full_name_hy: r.member?.full_name_hy || "",
+        email: r.member?.email || "",
+        phone: r.member?.phone || "",
+        dob: r.member?.dob || "",
+        gender: r.member?.gender || "",
+        section: r.member?.section || "",
+        patrol: r.member?.patrol || "",
+        position: r.member?.position || "",
+        chapter_name: r.member?.chapter_name || "",
+        guardian_name: r.member?.guardian_name || "",
+        guardian_phone: r.member?.guardian_phone || "",
+        parent_email: r.member?.parent_email || "",
+        emergency_contact: r.member?.emergency_contact || "",
+        membership_start: r.member?.membership_start || "",
+        registration_status: r.status || "",
+        paid: r.paid ? "Yes" : (Number(p.fee || 0) > 0 ? "No" : "Free"),
+        registered_at: r.created_at ? r.created_at.slice(0, 19).replace("T", " ") : "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      ws["!cols"] = headers.map(h => ({ wch: Math.max(16, h.length + 2) }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Registrants");
+      const date = new Date().toISOString().slice(0, 10);
+      const safeTitle = (p.title || "program").replace(/[^a-z0-9-]+/gi, "_").slice(0, 40);
+      XLSX.writeFile(wb, `registrants-${safeTitle}-${date}.xlsx`);
+      toast.success(`Downloaded ${rows.length} registrant${rows.length === 1 ? "" : "s"}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to download");
+    }
   };
   const register = async (p) => {
     try {
@@ -263,7 +309,10 @@ export default function Programs() {
                 )}
 
                 {canManage && (
-                  <div className="mt-3 flex gap-1">
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    <Button size="sm" variant="ghost" onClick={() => downloadRegistrants(p)} className="text-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,30%)]/10" data-testid={`dl-registrants-${p.program_id}`} title="Download registrants as Excel">
+                      <Download size={12} className="mr-1"/>Registrants{typeof p.registered_count === "number" ? ` (${p.registered_count})` : ""}
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => dup(p.program_id)} data-testid={`dup-prg-${p.program_id}`}><Copy size={12} className="mr-1"/>Duplicate</Button>
                     <Button size="sm" variant="ghost" onClick={() => remove(p.program_id)} className="text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" data-testid={`del-prg-${p.program_id}`}><Trash2 size={12} className="mr-1"/>Delete</Button>
                   </div>

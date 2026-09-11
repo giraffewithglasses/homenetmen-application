@@ -580,7 +580,7 @@ export default function Guest() {
                           a.href = href;
                           a.download = data.file_name || `${r.title || "resource"}`;
                           document.body.appendChild(a); a.click(); a.remove();
-                        } catch {}
+                        } catch (err) { console.warn("resource download failed:", err?.message); }
                       }}
                       className="mt-3 inline-flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-[hsl(12,65%,63%)] hover:text-[hsl(12,70%,55%)]"
                       data-testid={`guest-resource-dl-${r.resource_id}`}

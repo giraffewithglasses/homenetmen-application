@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
-import { Plus, Archive, ArchiveRestore, CheckCircle2, XCircle, Clock, Pencil } from "lucide-react";
+import { Plus, Archive, ArchiveRestore, CheckCircle2, XCircle, Clock, Pencil, Award } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import BadgePatch from "@/components/BadgePatch";
 
@@ -48,10 +48,15 @@ export default function Badges() {
   };
   useEffect(() => { load(); loadRequests(); /* eslint-disable-next-line */ }, [showArchived, user?.role]);
 
-  const decideRequest = async (mb_id, mode) => {
+  const decideRequest = async (mb_id, mode, extra = {}) => {
     try {
-      await api.post(`/badges/requests/${mb_id}/${mode}`);
-      toast.success(mode === "approve" ? "Request approved — scout can start" : "Request declined");
+      const params = mode === "approve" && extra.awardMode ? `?mode=${extra.awardMode}` : "";
+      await api.post(`/badges/requests/${mb_id}/${mode}${params}`);
+      if (mode === "approve") {
+        toast.success(extra.awardMode === "awarded" ? "Badge awarded to scout" : "Request approved — scout can start");
+      } else {
+        toast.success("Request declined");
+      }
       loadRequests();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }
   };
@@ -209,9 +214,12 @@ export default function Badges() {
                   <div className="font-semibold text-sm truncate">{r.member?.full_name || "Unknown scout"}</div>
                   <div className="text-xs text-muted-foreground truncate">wants to start <b>{r.badge?.name}</b> · {r.member?.section}</div>
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <Button size="sm" onClick={() => decideRequest(r.mb_id, "approve")} className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid={`badge-request-approve-${r.mb_id}`}>
-                    <CheckCircle2 size={12} className="mr-1"/> Approve
+                <div className="flex flex-wrap gap-2 flex-shrink-0 justify-end">
+                  <Button size="sm" onClick={() => decideRequest(r.mb_id, "approve", { awardMode: "in_progress" })} className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid={`badge-request-approve-${r.mb_id}`}>
+                    <CheckCircle2 size={12} className="mr-1"/> Approve to start
+                  </Button>
+                  <Button size="sm" onClick={() => { if (window.confirm(`Award '${r.badge?.name}' to ${r.member?.full_name || "this scout"} now? This marks all requirements complete.`)) decideRequest(r.mb_id, "approve", { awardMode: "awarded" }); }} className="btn-pill bg-[hsl(32,87%,55%)] hover:bg-[hsl(32,87%,45%)] text-[hsl(155,60%,8%)]" data-testid={`badge-request-award-${r.mb_id}`}>
+                    <Award size={12} className="mr-1"/> Award now
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => decideRequest(r.mb_id, "deny")} className="btn-pill text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" data-testid={`badge-request-deny-${r.mb_id}`}>
                     <XCircle size={12} className="mr-1"/> Deny

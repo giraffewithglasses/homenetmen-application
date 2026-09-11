@@ -1082,7 +1082,8 @@ async def list_badge_requests(user: dict = Depends(get_current_user)):
     return out
 
 @api.post("/badges/requests/{mb_id}/approve")
-async def approve_badge_request(mb_id: str, user: dict = Depends(get_current_user)):
+async def approve_badge_request(mb_id: str, mode: str = "in_progress", user: dict = Depends(get_current_user)):
+    """Approve a scout's badge request. mode: 'in_progress' (scout starts working) or 'awarded' (award immediately)."""
     if not is_leader(user["role"]):
         raise HTTPException(403, "Not allowed")
     mb = await db.member_badges.find_one({"mb_id": mb_id})
@@ -1091,16 +1092,26 @@ async def approve_badge_request(mb_id: str, user: dict = Depends(get_current_use
     m = await db.members.find_one({"member_id": mb["member_id"]})
     if not m: raise HTTPException(404, "Member not found")
     _member_chapter_guard(user, m["chapter_id"])
-    await db.member_badges.update_one(
-        {"mb_id": mb_id},
-        {"$set": {"status": "in_progress", "assigned_by": user["email"], "assigned_at": now_iso()}},
-    )
+    badge = await db.badges.find_one({"badge_id": mb["badge_id"]})
+    total = len(badge.get("requirements", [])) if badge else 0
+    mode_norm = "awarded" if mode == "awarded" else "in_progress"
+    update = {"status": mode_norm, "assigned_by": user["email"], "assigned_at": now_iso()}
+    if mode_norm == "awarded":
+        update.update({
+            "awarded": True,
+            "awarded_at": now_iso(),
+            "awarded_by": user["email"],
+            "completed_requirements": [True] * total,
+        })
+    await db.member_badges.update_one({"mb_id": mb_id}, {"$set": update})
     linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
     if linked:
-        badge = await db.badges.find_one({"badge_id": mb["badge_id"]}, {"name": 1})
-        await notify([linked["user_id"]], "Badge request approved", f"You can start working on '{badge.get('name') if badge else 'your badge'}'", "success", "/my-progress")
-    await audit(user, "approve", "badge_request", mb["badge_id"], {"member": mb["member_id"]})
-    return {"ok": True}
+        if mode_norm == "awarded":
+            await notify([linked["user_id"]], "Badge awarded!", f"You've earned '{badge.get('name') if badge else 'a badge'}' — congrats!", "success", "/my-progress")
+        else:
+            await notify([linked["user_id"]], "Badge request approved", f"You can start working on '{badge.get('name') if badge else 'your badge'}'", "success", "/my-progress")
+    await audit(user, f"approve_{mode_norm}", "badge_request", mb["badge_id"], {"member": mb["member_id"]})
+    return {"ok": True, "status": mode_norm}
 
 @api.post("/badges/requests/{mb_id}/deny")
 async def deny_badge_request(mb_id: str, user: dict = Depends(get_current_user)):
@@ -1263,8 +1274,56 @@ async def duplicate_program(program_id: str, user: dict = Depends(get_current_us
 # ---------- Event Registration ----------
 @api.get("/programs/{program_id}/registrations")
 async def list_registrations(program_id: str, user: dict = Depends(get_current_user)):
-    regs = await db.program_registrations.find({"program_id": program_id}, {"_id": 0}).sort("created_at", 1).to_list(1000)
-    return regs
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Not allowed")
+    p = await db.programs.find_one({"program_id": program_id})
+    if not p:
+        raise HTTPException(404, "Program not found")
+    # Chapter leaders can only see registrations for programs in their chapter (or national/regional programs)
+    if user["role"] in LEADER_ROLES and p.get("chapter_id") and p.get("chapter_id") != user.get("chapter_id"):
+        raise HTTPException(403, "Not allowed")
+
+    regs = await db.program_registrations.find({"program_id": program_id}, {"_id": 0}).sort("created_at", 1).to_list(2000)
+    if not regs:
+        return []
+
+    member_ids = [r.get("member_id") for r in regs if r.get("member_id")]
+    user_ids = [r.get("user_id") for r in regs if r.get("user_id")]
+    members = {m["member_id"]: m for m in await db.members.find({"member_id": {"$in": member_ids}}, {"_id": 0}).to_list(2000)}
+    users = {u["user_id"]: u for u in await db.users.find({"user_id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)}
+
+    # Enrich chapters
+    chapter_ids = list({m.get("chapter_id") for m in members.values() if m.get("chapter_id")})
+    chapters = {c["chapter_id"]: c.get("name", "") for c in await db.chapters.find({"chapter_id": {"$in": chapter_ids}}, {"_id": 0, "chapter_id": 1, "name": 1}).to_list(200)}
+
+    out = []
+    for r in regs:
+        m = members.get(r.get("member_id"), {}) if r.get("member_id") else {}
+        u = users.get(r.get("user_id"), {}) if r.get("user_id") else {}
+        out.append({
+            **r,
+            "member": {
+                "member_id": m.get("member_id", ""),
+                "full_name": m.get("full_name") or r.get("user_name") or u.get("name", ""),
+                "full_name_hy": m.get("full_name_hy", ""),
+                "email": m.get("email") or r.get("user_email") or u.get("email", ""),
+                "phone": m.get("phone", ""),
+                "dob": m.get("dob", ""),
+                "gender": m.get("gender", ""),
+                "section": m.get("section", ""),
+                "patrol": m.get("patrol", ""),
+                "position": m.get("position", ""),
+                "chapter_id": m.get("chapter_id", ""),
+                "chapter_name": chapters.get(m.get("chapter_id"), ""),
+                "guardian_name": m.get("guardian_name", ""),
+                "guardian_phone": m.get("guardian_phone", ""),
+                "parent_email": m.get("parent_email", ""),
+                "emergency_contact": m.get("emergency_contact", ""),
+                "membership_start": m.get("membership_start", ""),
+                "status": m.get("status", ""),
+            },
+        })
+    return out
 
 @api.get("/programs/{program_id}/my-registration")
 async def my_registration(program_id: str, user: dict = Depends(get_current_user)):

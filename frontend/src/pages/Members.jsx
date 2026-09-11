@@ -109,7 +109,7 @@ export default function Members() {
               },
             });
           }
-        } catch {}
+        } catch (err) { console.warn("role-sync check failed:", err?.message); }
       }
       setOpen(false); load();
     } catch (e) { toast.error(e.response?.data?.detail || "Failed"); }

@@ -37,8 +37,13 @@ Build a modern responsive scouting platform for HOMENETMEN HASK (Est. 1989). Cen
 - Public resources with anonymous download.
 - Idempotent seed via `ensure_seed_users_present()` (owner email auto-migrates).
 - **Digital Membership Card** (`/members/:id/card`) — printable, QR-scannable, links to public `/verify/:id`.
-- **Program Payments** — admins add a `fee` (USD); scouts pay via Stripe hosted checkout before registration is confirmed. Uses the shared emergent Stripe test sandbox (`STRIPE_API_KEY=sk_test_emergent`) because Flow A provisioning is not supported in Armenia (AM).
-- **Cascade Chapter Delete** — `DELETE /api/chapters/{id}` returns 409 with impact when linked records exist; caller supplies `reassign_to={target}` or `force=true`. Trash UI shows the cascade dialog.
+- **Program Payments** — admins add a `fee` (AMD); scouts pay via Stripe hosted checkout before registration is confirmed.
+- **Cascade Chapter Delete** — `DELETE /api/chapters/{id}` returns 409 with impact when linked records exist.
+- **Translations DB manager** + dynamic bilingual public pages.
+- **Gallery Lightbox + Cover Photos**, Excel exports for Members / Finances.
+- **[2026-02-28] Program Registrants Excel download** on Programs page (leaders + admins): `GET /api/programs/{id}/registrations` now enriches with full member details (phone, email, DOB, patrol, guardians, emergency contact, paid status, registered_at). Chapter scoped for chapter leaders.
+- **[2026-02-28] Badge Approval Workflow** — Leaders/admins can now Approve to start (in_progress), Award now (immediate award with all requirements marked complete), or Deny pending badge requests. `POST /api/badges/requests/{mb_id}/approve?mode=in_progress|awarded`.
+- **[2026-02-28] Code-review pass** — Added error logs to previously-silent catch blocks in `AuthContext.jsx`, `Members.jsx`, `Programs.jsx`, `Guest.jsx`. Fixed index-as-key in Finance category chart to use `${kind}-${category}` composite key.
 
 ## Backlog
 
