@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { FileText, Plus, Download, Archive, ArchiveRestore, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -16,6 +17,7 @@ const CATEGORIES = ["Manuals", "Activity ideas", "Progress badge materials", "Fo
 
 export default function Resources() {
   const { user } = useAuth();
+  const { t } = useT();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", category: "Manuals", description: "", file_data: "", file_name: "", file_type: "" });
@@ -66,8 +68,8 @@ export default function Resources() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="uppercase-label">Library</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Resources</h1>
+          <div className="uppercase-label">{t("Library", "Գրադարան")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Resources", "Ռեսուրսներ")}</h1>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
           {canUpload && (
@@ -86,10 +88,10 @@ export default function Resources() {
           {canUpload && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-res-btn"><Plus size={16} className="mr-2"/>Upload</Button>
+                <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-res-btn"><Plus size={16} className="mr-2"/>{t("Upload", "Վերբեռնել")}</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
-                <DialogHeader><DialogTitle>Upload Resource</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{t("Upload Resource", "Վերբեռնել ռեսուրս")}</DialogTitle></DialogHeader>
                 <div className="space-y-3">
                   <div><Label>Title</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})}/></div>
                   <div><Label>Category</Label>

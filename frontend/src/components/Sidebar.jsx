@@ -39,36 +39,53 @@ export default function Sidebar({ mobileOpen, setMobileOpen, lang }) {
   const items = ALL_ITEMS.filter((i) => i.roles.includes(user?.role));
   const isLeader = user?.role && LEADER_TIER.includes(user.role);
   const [pendingBadgeRequests, setPendingBadgeRequests] = useState(0);
+  const [programAttention, setProgramAttention] = useState({ count: 0, unpaid: 0, waitlisted: 0 });
 
   useEffect(() => {
-    if (!isLeader) { setPendingBadgeRequests(0); return; }
+    if (!isLeader) { setPendingBadgeRequests(0); setProgramAttention({ count: 0, unpaid: 0, waitlisted: 0 }); return; }
     let alive = true;
-    const fetchCount = async () => {
+    const fetchAll = async () => {
       try {
-        const { data } = await api.get("/badges/requests/count");
-        if (alive) setPendingBadgeRequests(data?.count || 0);
+        const [b, p] = await Promise.all([
+          api.get("/badges/requests/count"),
+          api.get("/programs/attention-count"),
+        ]);
+        if (alive) {
+          setPendingBadgeRequests(b.data?.count || 0);
+          setProgramAttention(p.data || { count: 0, unpaid: 0, waitlisted: 0 });
+        }
       } catch (err) {
-        if (alive) console.warn("badge request count failed:", err?.message);
+        if (alive) console.warn("sidebar counts failed:", err?.message);
       }
     };
-    fetchCount();
-    const id = setInterval(fetchCount, 60000);
-    const onFocus = () => fetchCount();
+    fetchAll();
+    const id = setInterval(fetchAll, 60000);
+    const onFocus = () => fetchAll();
     window.addEventListener("focus", onFocus);
-    window.addEventListener("badge-requests-changed", fetchCount);
+    window.addEventListener("badge-requests-changed", fetchAll);
+    window.addEventListener("program-registrations-changed", fetchAll);
     return () => {
       alive = false;
       clearInterval(id);
       window.removeEventListener("focus", onFocus);
-      window.removeEventListener("badge-requests-changed", fetchCount);
+      window.removeEventListener("badge-requests-changed", fetchAll);
+      window.removeEventListener("program-registrations-changed", fetchAll);
     };
   }, [isLeader]);
 
   const doLogout = async () => { await logout(); nav("/login"); };
 
   const badgeFor = (to) => {
-    if (to === "/badges" && pendingBadgeRequests > 0) return pendingBadgeRequests;
-    return 0;
+    if (to === "/badges" && pendingBadgeRequests > 0) {
+      return { count: pendingBadgeRequests, title: `${pendingBadgeRequests} pending badge request${pendingBadgeRequests === 1 ? "" : "s"}` };
+    }
+    if (to === "/programs" && programAttention.count > 0) {
+      const parts = [];
+      if (programAttention.unpaid) parts.push(`${programAttention.unpaid} unpaid`);
+      if (programAttention.waitlisted) parts.push(`${programAttention.waitlisted} waitlisted`);
+      return { count: programAttention.count, title: `Needs attention · ${parts.join(" · ")}` };
+    }
+    return null;
   };
 
   return (
@@ -98,7 +115,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, lang }) {
 
           <nav className="flex-1 overflow-y-auto px-4 space-y-1 pb-6">
             {items.map((it) => {
-              const count = badgeFor(it.to);
+              const info = badgeFor(it.to);
               return (
                 <NavLink
                   key={it.to}
@@ -110,14 +127,14 @@ export default function Sidebar({ mobileOpen, setMobileOpen, lang }) {
                 >
                   <it.icon size={18} strokeWidth={2.2} />
                   <span className="text-sm font-medium flex-1">{lang === "hy" ? it.labelHy : it.label}</span>
-                  {count > 0 && (
+                  {info && info.count > 0 && (
                     <span
                       className="ml-auto inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full text-[11px] font-bold text-white shadow-sm"
                       style={{ background: "hsl(0 72% 55%)" }}
                       data-testid={`nav-badge-count-${it.to.replace(/\//g, "-")}`}
-                      title={`${count} pending badge request${count === 1 ? "" : "s"}`}
+                      title={info.title}
                     >
-                      {count > 99 ? "99+" : count}
+                      {info.count > 99 ? "99+" : info.count}
                     </span>
                   )}
                 </NavLink>

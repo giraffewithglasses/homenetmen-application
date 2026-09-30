@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { Plus, Archive, ArchiveRestore, CheckCircle2, XCircle, Clock, Pencil, Award } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +22,7 @@ const CATEGORIES = ["Scouting Skills", "Camping", "Hiking", "First Aid", "Leader
 
 export default function Badges() {
   const { user } = useAuth();
+  const { t } = useT();
   const [badges, setBadges] = useState([]);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -146,9 +148,9 @@ export default function Badges() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="uppercase-label">Progress</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Progress Badges</h1>
-          <p className="text-muted-foreground mt-1">Skills, adventures and merit.</p>
+          <div className="uppercase-label">{t("Progress", "Առաջընթաց")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Progress Badges", "Առաջընթացի կրծքանշաններ")}</h1>
+          <p className="text-muted-foreground mt-1">{t("Skills, adventures and merit.", "Հմտություններ, արկածներ և վաստակ։")}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {user?.role === "national_admin" && (
@@ -167,10 +169,10 @@ export default function Badges() {
           {user?.role === "national_admin" && (
             <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(emptyForm()); } }}>
               <DialogTrigger asChild>
-                <Button className="btn-pill bg-[hsl(12,65%,63%)]" onClick={openNew} data-testid="new-badge-btn"><Plus size={16} className="mr-2"/>New Badge</Button>
+                <Button className="btn-pill bg-[hsl(12,65%,63%)]" onClick={openNew} data-testid="new-badge-btn"><Plus size={16} className="mr-2"/>{t("New Badge", "Նոր կրծքանշան")}</Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>{editingId ? "Edit Badge" : "New Badge"}</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingId ? t("Edit Badge", "Խմբագրել կրծքանշան") : t("New Badge", "Նոր կրծքանշան")}</DialogTitle></DialogHeader>
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Name</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} data-testid="bdg-name"/></div>
                   <div><Label>Name (Armenian)</Label><Input value={form.name_hy} onChange={e => setForm({...form, name_hy: e.target.value})}/></div>
@@ -251,7 +253,7 @@ export default function Badges() {
           <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Clock size={18} className="text-[hsl(32,87%,55%)]"/>
-              <h3 className="font-display font-bold text-xl">Pending badge requests <span className="text-muted-foreground font-normal">({requests.length})</span></h3>
+              <h3 className="font-display font-bold text-xl">{t("Pending badge requests", "Կրծքանշանի սպասող հայտեր")} <span className="text-muted-foreground font-normal">({requests.length})</span></h3>
             </div>
             <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold cursor-pointer select-none">
               <Checkbox

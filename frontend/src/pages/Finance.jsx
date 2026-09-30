@@ -11,12 +11,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { Wallet, TrendingUp, TrendingDown, Plus, Building2, Trash2, DollarSign, Calendar, Download } from "lucide-react";
 
 const fmt = (v) => `֏${Number(v || 0).toLocaleString()}`;
 
 export default function Finance() {
   const { user } = useAuth();
+  const { t } = useT();
   const [chapters, setChapters] = useState([]);
   const [scope, setScope] = useState(user?.role === "national_admin" ? "all" : (user?.chapter_id || "national"));
   const [summary, setSummary] = useState(null);
@@ -95,8 +97,8 @@ export default function Finance() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="uppercase-label flex items-center gap-2"><Wallet size={12}/> Ledger</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Finance</h1>
+          <div className="uppercase-label flex items-center gap-2"><Wallet size={12}/> {t("Ledger", "Հաշվեկշիռ")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Finance", "Ֆինանսներ")}</h1>
           <p className="text-muted-foreground mt-2">Track income, expenses, and net worth across every chapter and national.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

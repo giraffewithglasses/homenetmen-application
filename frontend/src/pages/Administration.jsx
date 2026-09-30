@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { UserCheck, UserX, ShieldCheck, Archive, Trash2, ArchiveRestore, Globe, MapPin, Save, GripVertical } from "lucide-react";
@@ -30,6 +31,7 @@ const ROLE_LABEL = {
 
 export default function Administration() {
   const { user } = useAuth();
+  const { t } = useT();
   const [users, setUsers] = useState([]);
   const [pending, setPending] = useState([]);
   const [chapters, setChapters] = useState([]);
@@ -85,8 +87,8 @@ export default function Administration() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="uppercase-label">Command Center</div>
-        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Administration</h1>
+        <div className="uppercase-label">{t("Command Center", "Հրամանատարական կենտրոն")}</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Administration", "Կառավարում")}</h1>
       </div>
 
       <Tabs defaultValue={pending.length ? "pending" : "users"}>

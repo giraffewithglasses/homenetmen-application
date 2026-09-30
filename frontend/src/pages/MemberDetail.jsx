@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Mail, Phone, Calendar, User, Shield, IdCard, Plus, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, User, Shield, IdCard, Plus, CheckCircle2, MessageCircle, Award as AwardIcon, Clock as ClockIcon, XCircle as XCircleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,10 +23,12 @@ export default function MemberDetail() {
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignBid, setAssignBid] = useState("");
   const [tracking, setTracking] = useState(null); // { mb, badge }
+  const [history, setHistory] = useState([]);
 
   const load = () => {
     api.get(`/members/${id}`).then(r => setM(r.data));
     api.get("/badges").then(r => setAllBadges(r.data));
+    api.get(`/members/${id}/badge-history`).then(r => setHistory(r.data || [])).catch(() => setHistory([]));
   };
   useEffect(() => { load(); }, [id]);
 
@@ -187,6 +189,50 @@ export default function MemberDetail() {
           {!m.badges?.length && <div className="text-sm text-muted-foreground">No badges yet.</div>}
         </div>
       </Card>
+
+      {history.length > 0 && (
+        <Card className="clay-card p-6" data-testid="badge-history-card">
+          <div className="uppercase-label mb-3">Badge History</div>
+          <div className="space-y-3">
+            {history.map(h => {
+              const status = h.status;
+              const iconMap = {
+                awarded: { Icon: AwardIcon, color: "hsl(32,87%,55%)", label: "Awarded" },
+                in_progress: { Icon: CheckCircle2, color: "hsl(149,40%,30%)", label: "In progress" },
+                requested: { Icon: ClockIcon, color: "hsl(32,87%,55%)", label: "Awaiting approval" },
+                denied: { Icon: XCircleIcon, color: "hsl(0,65%,55%)", label: "Denied" },
+              };
+              const meta = iconMap[status] || iconMap.in_progress;
+              const dateStr = (h.awarded_at || h.assigned_at || h.requested_at || "").slice(0, 10);
+              return (
+                <div key={h.mb_id} className="flex items-start gap-3 p-3 rounded-xl border border-border" data-testid={`badge-history-row-${h.mb_id}`}>
+                  <BadgePatch badge={h.badge} awarded={h.awarded} size={40}/>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm truncate">{h.badge?.name || "Badge"}</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest" style={{ color: meta.color }}>
+                        <meta.Icon size={11}/> {meta.label}
+                      </span>
+                      {dateStr && <span className="text-[10px] text-muted-foreground">{dateStr}</span>}
+                    </div>
+                    {(h.assigned_by || h.awarded_by) && (
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        by {h.awarded_by || h.assigned_by}
+                      </div>
+                    )}
+                    {h.leader_note && (
+                      <div className="mt-2 flex items-start gap-2 text-xs bg-muted/40 rounded-lg p-2" data-testid={`badge-history-note-${h.mb_id}`}>
+                        <MessageCircle size={12} className="mt-0.5 flex-shrink-0 text-[hsl(12,65%,55%)]"/>
+                        <span className="italic">“{h.leader_note}”</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       <Dialog open={!!tracking} onOpenChange={(o) => { if (!o) setTracking(null); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="badge-progress-dialog">

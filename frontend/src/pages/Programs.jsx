@@ -13,7 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { Plus, MapPin, Clock, Copy, CalendarDays, Trash2, Users, CheckCircle2, DollarSign, Download } from "lucide-react";
+import RegistrantManagerDialog from "@/components/RegistrantManagerDialog";
 
 const SECTIONS = ["Cubs", "Scouts", "Senior Scouts", "Rovers"];
 const LEADER_ROLES = ["national_admin", "chapter_admin", "chapter_leader", "scout_leader", "cubs_leader", "patrol_leader", "patrol_co_leader"];
@@ -32,10 +34,12 @@ const emptyForm = {
 
 export default function Programs() {
   const { user } = useAuth();
+  const { t } = useT();
   const [programs, setPrograms] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [myRegs, setMyRegs] = useState({}); // {program_id: status}
+  const [managing, setManaging] = useState(null); // program object being managed
 
   const load = async () => {
     const { data } = await api.get("/programs");
@@ -156,17 +160,17 @@ export default function Programs() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="uppercase-label">Programs & Activities</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Programs</h1>
-          <p className="text-muted-foreground mt-1">National, regional and chapter programs.</p>
+          <div className="uppercase-label">{t("Programs & Activities", "Ծրագրեր և գործունեություն")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Programs", "Ծրագրեր")}</h1>
+          <p className="text-muted-foreground mt-1">{t("National, regional and chapter programs.", "Ազգային, տարածաշրջանային և մասնաճյուղի ծրագրեր։")}</p>
         </div>
         {canManage && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-program-btn"><Plus size={16} className="mr-2"/>New Program</Button>
+              <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-program-btn"><Plus size={16} className="mr-2"/>{t("New Program", "Նոր ծրագիր")}</Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>New Program</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t("New Program", "Նոր ծրագիր")}</DialogTitle></DialogHeader>
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2"><Label>Title</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} data-testid="prg-title"/></div>
                 <div className="col-span-2"><Label>Title (Armenian)</Label><Input value={form.title_hy} onChange={e => setForm({...form, title_hy: e.target.value})}/></div>
@@ -310,8 +314,11 @@ export default function Programs() {
 
                 {canManage && (
                   <div className="mt-3 flex flex-wrap gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => downloadRegistrants(p)} className="text-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,30%)]/10" data-testid={`dl-registrants-${p.program_id}`} title="Download registrants as Excel">
-                      <Download size={12} className="mr-1"/>Registrants{typeof p.registered_count === "number" ? ` (${p.registered_count})` : ""}
+                    <Button size="sm" variant="ghost" onClick={() => setManaging(p)} className="text-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,30%)]/10" data-testid={`manage-registrants-${p.program_id}`} title="Open registrant manager">
+                      <Users size={12} className="mr-1"/>Registrants{typeof p.registered_count === "number" ? ` (${p.registered_count}${p.waitlist_count ? `+${p.waitlist_count}` : ""})` : ""}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => downloadRegistrants(p)} data-testid={`dl-registrants-${p.program_id}`} title="Quick download Excel">
+                      <Download size={12} className="mr-1"/>Excel
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => dup(p.program_id)} data-testid={`dup-prg-${p.program_id}`}><Copy size={12} className="mr-1"/>Duplicate</Button>
                     <Button size="sm" variant="ghost" onClick={() => remove(p.program_id)} className="text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" data-testid={`del-prg-${p.program_id}`}><Trash2 size={12} className="mr-1"/>Delete</Button>
@@ -322,6 +329,13 @@ export default function Programs() {
           );
         })}
       </div>
+
+      <RegistrantManagerDialog
+        program={managing}
+        open={!!managing}
+        onClose={() => setManaging(null)}
+        onChanged={load}
+      />
     </div>
   );
 }

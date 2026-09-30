@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { confirmWithUndo } from "@/lib/undo";
 import { Plus, Download, Search, Archive, Pencil, UserPlus, EyeOff, Eye } from "lucide-react";
 
@@ -43,6 +44,7 @@ const emptyForm = {
 
 export default function Members() {
   const { user } = useAuth();
+  const { t } = useT();
   const [members, setMembers] = useState([]);
   const [chapters, setChapters] = useState([]);
   const [q, setQ] = useState("");
@@ -182,9 +184,9 @@ export default function Members() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="uppercase-label">Database</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Members</h1>
-          <p className="text-muted-foreground mt-1 text-sm">{members.length} shown{selected.size ? ` · ${selected.size} selected` : ""}</p>
+          <div className="uppercase-label">{t("Database", "Տվյալների բազա")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Members", "Անդամներ")}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">{members.length} {t("shown", "ցուցադրված է")}{selected.size ? ` · ${selected.size} ${t("selected", "ընտրված")}` : ""}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
@@ -201,13 +203,13 @@ export default function Members() {
             </Button>
           )}
           <Button variant="outline" className="btn-pill" onClick={exportExcel} data-testid="export-excel"><Download size={16} className="mr-2"/> Excel</Button>
-          <Button className="btn-pill bg-[hsl(12,65%,63%)]" onClick={openNew} data-testid="new-member-btn"><Plus size={16} className="mr-2"/>New Member</Button>
+          <Button className="btn-pill bg-[hsl(12,65%,63%)]" onClick={openNew} data-testid="new-member-btn"><Plus size={16} className="mr-2"/>{t("New Member", "Նոր անդամ")}</Button>
         </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? "Edit Member" : "New Member"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t("Edit Member", "Խմբագրել անդամ") : t("New Member", "Նոր անդամ")}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Full name</Label><Input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} data-testid="mbr-name"/></div>
             <div><Label>Full name (Armenian)</Label><Input value={form.full_name_hy || ""} onChange={e => setForm({...form, full_name_hy: e.target.value})}/></div>
