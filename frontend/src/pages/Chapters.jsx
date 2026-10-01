@@ -10,10 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { Building2, MapPin, Users, Plus, ChevronRight, Archive, ArchiveRestore, Pencil, Image as ImageIcon } from "lucide-react";
 
 export default function Chapters() {
   const { user } = useAuth();
+  const { t } = useT();
   const [chapters, setChapters] = useState([]);
   const [showArchived, setShowArchived] = useState(false);
   const [open, setOpen] = useState(false);
@@ -58,24 +60,24 @@ export default function Chapters() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="uppercase-label">Directory</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Chapters</h1>
-          <p className="text-muted-foreground mt-2">Local scouting hubs across the country.</p>
+          <div className="uppercase-label">{t("Directory", "Ցուցակ")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Chapters", "Մասնաճյուղեր")}</h1>
+          <p className="text-muted-foreground mt-2">{t("Local scouting hubs across the country.", "Երկրի սկաուտական տեղական կենտրոնները։")}</p>
         </div>
         <div className="flex items-center gap-4">
           {isAdmin && (
             <label className="flex items-center gap-2 text-xs uppercase tracking-widest font-bold cursor-pointer">
               <Switch checked={showArchived} onCheckedChange={setShowArchived} data-testid="chp-show-archived"/>
-              Show archived
+              {t("Show archived", "Ցույց տալ արխիվացվածները")}
             </label>
           )}
           {isAdmin && (
             <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditing(null); }}>
               <DialogTrigger asChild>
-                <Button className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" onClick={openNew} data-testid="new-chapter-btn"><Plus size={16} className="mr-2" />New Chapter</Button>
+                <Button className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" onClick={openNew} data-testid="new-chapter-btn"><Plus size={16} className="mr-2" />{t("New Chapter", "Նոր մասնաճյուղ")}</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>{editing ? "Edit Chapter" : "New Chapter"}</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editing ? t("Edit Chapter", "Խմբագրել մասնաճյուղ") : t("New Chapter", "Նոր մասնաճյուղ")}</DialogTitle></DialogHeader>
                 <div className="space-y-3">
                   <div>
                     <Label>Chapter logo</Label>

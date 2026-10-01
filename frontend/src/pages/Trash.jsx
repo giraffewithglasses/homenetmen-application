@@ -8,8 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, Award, FileText, RotateCcw, Trash2, Users, AlertTriangle } from "lucide-react";
 import BadgePatch from "@/components/BadgePatch";
 import { toast } from "sonner";
+import { useT } from "@/context/I18nContext";
 
 export default function Trash() {
+  const { t } = useT();
   const [data, setData] = useState({ chapters: [], badges: [], resources: [], members: [] });
   const [allChapters, setAllChapters] = useState([]);
   const [cascade, setCascade] = useState(null); // { chapter, impact }
@@ -67,11 +69,11 @@ export default function Trash() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="uppercase-label">Recycle</div>
-        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Trash Bin</h1>
+        <div className="uppercase-label">{t("Recycle", "Վերականգնում")}</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Trash Bin", "Աղբարկղ")}</h1>
         <p className="text-muted-foreground mt-2 text-sm">
-          Archived items across the platform. Restore anything, or delete forever.
-          <span className="ml-2 font-bold">{total} items</span>
+          {t("Archived items across the platform. Restore anything, or delete forever.", "Հարթակի արխիվացված տարրերը։ Կարող եք վերականգնել կամ ընդմիշտ ջնջել։")}
+          <span className="ml-2 font-bold">{total} {t("items", "տարրեր")}</span>
         </p>
       </div>
 

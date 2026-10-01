@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 
 const STATUSES = ["present", "absent", "late", "excused"];
@@ -18,6 +19,7 @@ const STATUS_STYLE = {
 
 export default function Attendance() {
   const { user } = useAuth();
+  const { t } = useT();
   const [programs, setPrograms] = useState([]);
   const [selectedProgram, setSelectedProgram] = useState("");
   const [members, setMembers] = useState([]);
@@ -49,19 +51,19 @@ export default function Attendance() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="uppercase-label">Roll Call</div>
-        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Attendance</h1>
+        <div className="uppercase-label">{t("Roll Call", "Հաճախումների ցուցակ")}</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Attendance", "Հաճախում")}</h1>
       </div>
 
       <Card className="clay-card p-6">
         <div className="flex items-center gap-3">
           <Select value={selectedProgram} onValueChange={setSelectedProgram}>
-            <SelectTrigger className="max-w-md" data-testid="att-program-select"><SelectValue placeholder="Select a program"/></SelectTrigger>
+            <SelectTrigger className="max-w-md" data-testid="att-program-select"><SelectValue placeholder={t("Select a program", "Ընտրել ծրագիր")}/></SelectTrigger>
             <SelectContent>
               {programs.map(p => <SelectItem key={p.program_id} value={p.program_id}>{p.title} — {p.date}</SelectItem>)}
             </SelectContent>
           </Select>
-          {selectedProgram && <Button className="btn-pill bg-[hsl(149,40%,30%)]" onClick={save} data-testid="att-save">Save Attendance</Button>}
+          {selectedProgram && <Button className="btn-pill bg-[hsl(149,40%,30%)]" onClick={save} data-testid="att-save">{t("Save Attendance", "Պահպանել հաճախումը")}</Button>}
         </div>
       </Card>
 

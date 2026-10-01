@@ -11,11 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { confirmWithUndo } from "@/lib/undo";
 import { Plus, AlertOctagon, Megaphone, Trash2 } from "lucide-react";
 
 export default function Announcements() {
   const { user } = useAuth();
+  const { t } = useT();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(new Set());
@@ -69,8 +71,8 @@ export default function Announcements() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="uppercase-label">News</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Announcements</h1>
+          <div className="uppercase-label">{t("News", "Նորություններ")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Announcements", "Հայտարարություններ")}</h1>
           {selected.size > 0 && <p className="text-xs uppercase tracking-widest text-[hsl(12,65%,63%)] font-bold mt-1">{selected.size} selected</p>}
         </div>
         <div className="flex gap-2">
@@ -82,10 +84,10 @@ export default function Announcements() {
           {canPost && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-ann-btn"><Plus size={16} className="mr-2"/>New Announcement</Button>
+                <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-ann-btn"><Plus size={16} className="mr-2"/>{t("New Announcement", "Նոր հայտարարություն")}</Button>
               </DialogTrigger>
               <DialogContent className="max-w-lg">
-                <DialogHeader><DialogTitle>New Announcement</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{t("New Announcement", "Նոր հայտարարություն")}</DialogTitle></DialogHeader>
                 <div className="space-y-3">
                   <div><Label>Title</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})}/></div>
                   <div><Label>Title (Armenian)</Label><Input value={form.title_hy} onChange={e => setForm({...form, title_hy: e.target.value})}/></div>

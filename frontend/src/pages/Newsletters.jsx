@@ -8,10 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { Plus, Mail, Trash2 } from "lucide-react";
 
 export default function Newsletters() {
   const { user } = useAuth();
+  const { t } = useT();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -35,16 +37,16 @@ export default function Newsletters() {
     <div className="space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <div className="uppercase-label">Publications</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Newsletters</h1>
+          <div className="uppercase-label">{t("Publications", "Հրապարակումներ")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Newsletters", "Տեղեկագիր")}</h1>
         </div>
         {user?.role === "national_admin" && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-newsletter-btn"><Plus size={16} className="mr-2"/>Publish</Button>
+              <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-newsletter-btn"><Plus size={16} className="mr-2"/>{t("Publish", "Հրապարակել")}</Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
-              <DialogHeader><DialogTitle>New Newsletter</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t("New Newsletter", "Նոր տեղեկագիր")}</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <div><Label>Title</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})}/></div>
                 <div><Label>Title (Armenian)</Label><Input value={form.title_hy} onChange={e => setForm({...form, title_hy: e.target.value})}/></div>

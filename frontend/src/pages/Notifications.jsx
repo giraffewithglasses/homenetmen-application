@@ -4,8 +4,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Bell, Check, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useT } from "@/context/I18nContext";
 
 export default function Notifications() {
+  const { t } = useT();
   const [items, setItems] = useState([]);
   const load = () => api.get("/notifications").then(r => setItems(r.data));
   useEffect(() => { load(); }, []);
@@ -21,12 +23,12 @@ export default function Notifications() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-2">
         <div>
-          <div className="uppercase-label">Inbox</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Notifications</h1>
+          <div className="uppercase-label">{t("Inbox", "Մուտքային")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Notifications", "Ծանուցումներ")}</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="btn-pill" onClick={readAll} data-testid="mark-all-read"><Check size={14} className="mr-2"/>Mark all read</Button>
-          <Button variant="outline" className="btn-pill text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" onClick={clearAll} data-testid="clear-all-notifs"><Trash2 size={14} className="mr-2"/>Clear all</Button>
+          <Button variant="outline" className="btn-pill" onClick={readAll} data-testid="mark-all-read"><Check size={14} className="mr-2"/>{t("Mark all read", "Նշել բոլորը որպես կարդացած")}</Button>
+          <Button variant="outline" className="btn-pill text-[hsl(0,65%,55%)] hover:bg-[hsl(0,65%,55%)]/10" onClick={clearAll} data-testid="clear-all-notifs"><Trash2 size={14} className="mr-2"/>{t("Clear all", "Մաքրել բոլորը")}</Button>
         </div>
       </div>
 

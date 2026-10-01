@@ -477,8 +477,12 @@ async def public_homepage_settings():
             "hq_address": "Yervand Kochar 17/6\nYerevan, Armenia",
             "hq_email": "hq@homenetmen-hask.am",
             "hq_phone": "+374 10 000 000",
-            "latitude": 40.1840,
-            "longitude": 44.5110,
+            "latitude": 40.1893,
+            "longitude": 44.5175,
+            "facebook": "",
+            "instagram": "",
+            "x": "",
+            "telegram": "",
         },
         "section_order": ["chapters", "events", "badges", "newsletters", "leaders", "galleries", "resources"],
     }
@@ -498,6 +502,44 @@ async def update_homepage_settings(payload: HomepageSettingsIn, user: dict = Dep
     await db.homepage_settings.update_one({"key": "singleton"}, {"$set": doc}, upsert=True)
     await audit(user, "update", "homepage_settings", "singleton")
     return {"ok": True}
+
+@api.get("/public/translations")
+async def public_translations():
+    """Public dictionary { en_string: hy_string }. Consumed by every page's t() helper."""
+    docs = await db.translations.find({}, {"_id": 0, "en": 1, "hy": 1}).to_list(5000)
+    return {d["en"]: d.get("hy", "") for d in docs}
+
+@api.get("/translations")
+async def list_translations(user: dict = Depends(require_roles("national_admin"))):
+    return await db.translations.find({}, {"_id": 0}).sort("en", 1).to_list(5000)
+
+class TranslationEntry(BaseModel):
+    en: str
+    hy: str = ""
+
+class TranslationsBulkIn(BaseModel):
+    entries: List[TranslationEntry]
+
+@api.put("/translations")
+async def upsert_translations(payload: TranslationsBulkIn, user: dict = Depends(require_roles("national_admin"))):
+    """Bulk upsert. Keyed by `en` string (canonical English)."""
+    now = now_iso()
+    ops = 0
+    for e in payload.entries:
+        if not e.en.strip(): continue
+        await db.translations.update_one(
+            {"en": e.en},
+            {"$set": {"en": e.en, "hy": e.hy, "updated_at": now, "updated_by": user["email"]}},
+            upsert=True,
+        )
+        ops += 1
+    await audit(user, "bulk_upsert", "translation", "*", {"count": ops})
+    return {"ok": True, "count": ops}
+
+@api.delete("/translations")
+async def delete_translation(en: str, user: dict = Depends(require_roles("national_admin"))):
+    r = await db.translations.delete_one({"en": en})
+    return {"ok": True, "deleted": r.deleted_count}
 
 # ---------- Auth Endpoints ----------
 @api.post("/auth/register")
@@ -929,6 +971,46 @@ async def unarchive_badge(badge_id: str, user: dict = Depends(require_roles("nat
 async def member_badges(member_id: str, user: dict = Depends(get_current_user)):
     return await db.member_badges.find({"member_id": member_id}, {"_id": 0}).to_list(500)
 
+@api.get("/members/{member_id}/badge-history")
+async def member_badge_history(member_id: str, user: dict = Depends(get_current_user)):
+    """Enriched badge decisions for a member — badge name, status, leader note, and dates.
+    Sorted newest-first. Accessible to the member themself, their parents, and any leader/admin
+    who can see the member."""
+    m = await db.members.find_one({"member_id": member_id}, {"_id": 0, "email": 1, "chapter_id": 1})
+    if not m: raise HTTPException(404, "Member not found")
+    allowed = (
+        user["role"] == "national_admin"
+        or (is_leader(user["role"]) and user.get("chapter_id") == m.get("chapter_id"))
+        or (user["role"] == "scout" and user.get("email") == m.get("email"))
+        or (user["role"] == "parent" and member_id in (user.get("linked_member_ids") or []))
+    )
+    if not allowed: raise HTTPException(403, "Not allowed")
+    rows = await db.member_badges.find({"member_id": member_id}, {"_id": 0}).to_list(500)
+    if not rows: return []
+    badge_ids = list({r.get("badge_id") for r in rows if r.get("badge_id")})
+    badges = {b["badge_id"]: b for b in await db.badges.find({"badge_id": {"$in": badge_ids}}, {"_id": 0, "badge_id": 1, "name": 1, "name_hy": 1, "color": 1, "icon": 1, "icon_image": 1, "category": 1, "section": 1}).to_list(500)}
+    out = []
+    for r in rows:
+        b = badges.get(r.get("badge_id"), {})
+        status = "awarded" if r.get("awarded") else (r.get("status") or "in_progress")
+        # newest-first sort key
+        ts = r.get("awarded_at") or r.get("assigned_at") or r.get("requested_at") or r.get("created_at") or ""
+        out.append({
+            "mb_id": r.get("mb_id"),
+            "badge": b,
+            "status": status,
+            "awarded": bool(r.get("awarded")),
+            "leader_note": r.get("leader_note", ""),
+            "assigned_by": r.get("assigned_by", ""),
+            "awarded_by": r.get("awarded_by", ""),
+            "requested_at": r.get("requested_at", ""),
+            "assigned_at": r.get("assigned_at", ""),
+            "awarded_at": r.get("awarded_at", ""),
+            "sort_ts": ts,
+        })
+    out.sort(key=lambda x: x["sort_ts"], reverse=True)
+    return out
+
 class BadgeAssignIn(BaseModel):
     member_id: str
     badge_id: str
@@ -1039,8 +1121,34 @@ async def list_badge_requests(user: dict = Depends(get_current_user)):
         out.append(r)
     return out
 
+@api.get("/badges/requests/count")
+async def count_badge_requests(user: dict = Depends(get_current_user)):
+    """Lightweight count of pending badge requests visible to this leader/admin."""
+    if not is_leader(user["role"]):
+        return {"count": 0}
+    if user["role"] == "national_admin":
+        n = await db.member_badges.count_documents({"status": "requested"})
+        return {"count": n}
+    # chapter-scoped: only count requests from members in this chapter
+    member_ids = [m["member_id"] for m in await db.members.find(
+        {"chapter_id": user.get("chapter_id")}, {"member_id": 1}
+    ).to_list(2000)]
+    if not member_ids:
+        return {"count": 0}
+    n = await db.member_badges.count_documents({"status": "requested", "member_id": {"$in": member_ids}})
+    return {"count": n}
+
+class BadgeDecisionIn(BaseModel):
+    note: Optional[str] = ""
+
 @api.post("/badges/requests/{mb_id}/approve")
-async def approve_badge_request(mb_id: str, user: dict = Depends(get_current_user)):
+async def approve_badge_request(
+    mb_id: str,
+    mode: str = "in_progress",
+    payload: Optional[BadgeDecisionIn] = None,
+    user: dict = Depends(get_current_user),
+):
+    """Approve a scout's badge request. mode: 'in_progress' (scout starts working) or 'awarded' (award immediately)."""
     if not is_leader(user["role"]):
         raise HTTPException(403, "Not allowed")
     mb = await db.member_badges.find_one({"mb_id": mb_id})
@@ -1049,19 +1157,39 @@ async def approve_badge_request(mb_id: str, user: dict = Depends(get_current_use
     m = await db.members.find_one({"member_id": mb["member_id"]})
     if not m: raise HTTPException(404, "Member not found")
     _member_chapter_guard(user, m["chapter_id"])
-    await db.member_badges.update_one(
-        {"mb_id": mb_id},
-        {"$set": {"status": "in_progress", "assigned_by": user["email"], "assigned_at": now_iso()}},
-    )
+    badge = await db.badges.find_one({"badge_id": mb["badge_id"]})
+    total = len(badge.get("requirements", [])) if badge else 0
+    mode_norm = "awarded" if mode == "awarded" else "in_progress"
+    note = (payload.note if payload else "") or ""
+    update = {"status": mode_norm, "assigned_by": user["email"], "assigned_at": now_iso(), "leader_note": note}
+    if mode_norm == "awarded":
+        update.update({
+            "awarded": True,
+            "awarded_at": now_iso(),
+            "awarded_by": user["email"],
+            "completed_requirements": [True] * total,
+        })
+    await db.member_badges.update_one({"mb_id": mb_id}, {"$set": update})
     linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
     if linked:
-        badge = await db.badges.find_one({"badge_id": mb["badge_id"]}, {"name": 1})
-        await notify([linked["user_id"]], "Badge request approved", f"You can start working on '{badge.get('name') if badge else 'your badge'}'", "success", "/my-progress")
-    await audit(user, "approve", "badge_request", mb["badge_id"], {"member": mb["member_id"]})
-    return {"ok": True}
+        b_name = badge.get("name") if badge else "your badge"
+        if mode_norm == "awarded":
+            msg = f"You've earned '{b_name}' — congrats!"
+            if note: msg += f"\n\nFrom your leader: “{note}”"
+            await notify([linked["user_id"]], "Badge awarded!", msg, "success", "/my-progress")
+        else:
+            msg = f"You can start working on '{b_name}'"
+            if note: msg += f"\n\nFrom your leader: “{note}”"
+            await notify([linked["user_id"]], "Badge request approved", msg, "success", "/my-progress")
+    await audit(user, f"approve_{mode_norm}", "badge_request", mb["badge_id"], {"member": mb["member_id"], "note": bool(note)})
+    return {"ok": True, "status": mode_norm}
 
 @api.post("/badges/requests/{mb_id}/deny")
-async def deny_badge_request(mb_id: str, user: dict = Depends(get_current_user)):
+async def deny_badge_request(
+    mb_id: str,
+    payload: Optional[BadgeDecisionIn] = None,
+    user: dict = Depends(get_current_user),
+):
     if not is_leader(user["role"]):
         raise HTTPException(403, "Not allowed")
     mb = await db.member_badges.find_one({"mb_id": mb_id})
@@ -1071,12 +1199,88 @@ async def deny_badge_request(mb_id: str, user: dict = Depends(get_current_user))
     if not m: raise HTTPException(404, "Member not found")
     _member_chapter_guard(user, m["chapter_id"])
     await db.member_badges.delete_one({"mb_id": mb_id})
+    note = (payload.note if payload else "") or ""
     linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
     if linked:
         badge = await db.badges.find_one({"badge_id": mb["badge_id"]}, {"name": 1})
-        await notify([linked["user_id"]], "Badge request declined", f"Your request for '{badge.get('name') if badge else 'the badge'}' wasn't approved this time. Talk to your leader.", "warning", "/my-progress")
-    await audit(user, "deny", "badge_request", mb["badge_id"], {"member": mb["member_id"]})
+        b_name = badge.get("name") if badge else "the badge"
+        msg = f"Your request for '{b_name}' wasn't approved this time."
+        if note:
+            msg += f"\n\nFrom your leader: “{note}”"
+        else:
+            msg += " Talk to your leader."
+        await notify([linked["user_id"]], "Badge request declined", msg, "warning", "/my-progress")
+    await audit(user, "deny", "badge_request", mb["badge_id"], {"member": mb["member_id"], "note": bool(note)})
     return {"ok": True}
+
+class BadgeBulkDecisionIn(BaseModel):
+    mb_ids: List[str]
+    action: str  # "approve" | "deny"
+    mode: str = "in_progress"  # only for approve
+    note: Optional[str] = ""
+
+@api.post("/badges/requests/bulk")
+async def bulk_decide_badge_requests(payload: BadgeBulkDecisionIn, user: dict = Depends(get_current_user)):
+    """Approve or deny many badge requests at once. Returns per-request outcome."""
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Not allowed")
+    if payload.action not in ("approve", "deny"):
+        raise HTTPException(400, "action must be 'approve' or 'deny'")
+    ids = list({i for i in (payload.mb_ids or []) if i})
+    if not ids:
+        return {"ok": True, "processed": 0, "results": []}
+    mode_norm = "awarded" if payload.mode == "awarded" else "in_progress"
+    note = payload.note or ""
+    results = []
+    processed = 0
+    for mb_id in ids:
+        try:
+            mb = await db.member_badges.find_one({"mb_id": mb_id})
+            if not mb or mb.get("status") != "requested":
+                results.append({"mb_id": mb_id, "ok": False, "reason": "not_pending"}); continue
+            m = await db.members.find_one({"member_id": mb["member_id"]})
+            if not m:
+                results.append({"mb_id": mb_id, "ok": False, "reason": "member_missing"}); continue
+            # chapter guard (skip silently for out-of-chapter requests)
+            if user["role"] != "national_admin" and user.get("chapter_id") != m.get("chapter_id"):
+                results.append({"mb_id": mb_id, "ok": False, "reason": "forbidden"}); continue
+            badge = await db.badges.find_one({"badge_id": mb["badge_id"]})
+            total = len(badge.get("requirements", [])) if badge else 0
+            linked = await db.users.find_one({"email": m.get("email")}, {"user_id": 1}) if m.get("email") else None
+            b_name = badge.get("name") if badge else "your badge"
+            if payload.action == "approve":
+                update = {"status": mode_norm, "assigned_by": user["email"], "assigned_at": now_iso(), "leader_note": note}
+                if mode_norm == "awarded":
+                    update.update({
+                        "awarded": True,
+                        "awarded_at": now_iso(),
+                        "awarded_by": user["email"],
+                        "completed_requirements": [True] * total,
+                    })
+                await db.member_badges.update_one({"mb_id": mb_id}, {"$set": update})
+                if linked:
+                    if mode_norm == "awarded":
+                        msg = f"You've earned '{b_name}' — congrats!"
+                    else:
+                        msg = f"You can start working on '{b_name}'"
+                    if note: msg += f"\n\nFrom your leader: “{note}”"
+                    title = "Badge awarded!" if mode_norm == "awarded" else "Badge request approved"
+                    kind = "success"
+                    await notify([linked["user_id"]], title, msg, kind, "/my-progress")
+                await audit(user, f"approve_{mode_norm}", "badge_request", mb["badge_id"], {"member": mb["member_id"], "bulk": True, "note": bool(note)})
+            else:  # deny
+                await db.member_badges.delete_one({"mb_id": mb_id})
+                if linked:
+                    msg = f"Your request for '{b_name}' wasn't approved this time."
+                    if note: msg += f"\n\nFrom your leader: “{note}”"
+                    else: msg += " Talk to your leader."
+                    await notify([linked["user_id"]], "Badge request declined", msg, "warning", "/my-progress")
+                await audit(user, "deny", "badge_request", mb["badge_id"], {"member": mb["member_id"], "bulk": True, "note": bool(note)})
+            processed += 1
+            results.append({"mb_id": mb_id, "ok": True})
+        except Exception as e:
+            results.append({"mb_id": mb_id, "ok": False, "reason": str(e)[:80]})
+    return {"ok": True, "processed": processed, "results": results}
 
 @api.post("/badges/progress")
 async def update_progress(payload: RequirementUpdate, user: dict = Depends(get_current_user)):
@@ -1165,6 +1369,32 @@ async def list_programs(chapter_id: Optional[str] = None, user: dict = Depends(g
         it["waitlist_count"] = await db.program_registrations.count_documents({"program_id": it["program_id"], "status": "waitlisted"})
     return items
 
+@api.get("/programs/attention-count")
+async def programs_attention_count(user: dict = Depends(get_current_user)):
+    """Count of programs that need leader attention (unpaid registrants or waitlist entries).
+    Returns {count, unpaid, waitlisted} scoped to the caller's chapter for leaders."""
+    if not is_leader(user["role"]):
+        return {"count": 0, "unpaid": 0, "waitlisted": 0}
+    # Programs the leader can act on: national/regional (chapter_id null) + their chapter
+    if user["role"] == "national_admin":
+        prog_q = {}
+    else:
+        prog_q = {"$or": [{"chapter_id": None}, {"chapter_id": user.get("chapter_id")}]}
+    prog_ids = [p["program_id"] for p in await db.programs.find(prog_q, {"program_id": 1, "fee": 1}).to_list(500)]
+    if not prog_ids:
+        return {"count": 0, "unpaid": 0, "waitlisted": 0}
+    waitlisted = await db.program_registrations.count_documents({"program_id": {"$in": prog_ids}, "status": "waitlisted"})
+    paid_progs = await db.programs.find({"program_id": {"$in": prog_ids}, "fee": {"$gt": 0}}, {"program_id": 1}).to_list(500)
+    paid_prog_ids = [p["program_id"] for p in paid_progs]
+    unpaid = 0
+    if paid_prog_ids:
+        unpaid = await db.program_registrations.count_documents({
+            "program_id": {"$in": paid_prog_ids},
+            "status": "registered",
+            "paid": {"$ne": True},
+        })
+    return {"count": unpaid + waitlisted, "unpaid": unpaid, "waitlisted": waitlisted}
+
 @api.get("/programs/{program_id}")
 async def get_program(program_id: str):
     p = await db.programs.find_one({"program_id": program_id}, {"_id": 0})
@@ -1221,8 +1451,56 @@ async def duplicate_program(program_id: str, user: dict = Depends(get_current_us
 # ---------- Event Registration ----------
 @api.get("/programs/{program_id}/registrations")
 async def list_registrations(program_id: str, user: dict = Depends(get_current_user)):
-    regs = await db.program_registrations.find({"program_id": program_id}, {"_id": 0}).sort("created_at", 1).to_list(1000)
-    return regs
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Not allowed")
+    p = await db.programs.find_one({"program_id": program_id})
+    if not p:
+        raise HTTPException(404, "Program not found")
+    # Chapter leaders can only see registrations for programs in their chapter (or national/regional programs)
+    if user["role"] in LEADER_ROLES and p.get("chapter_id") and p.get("chapter_id") != user.get("chapter_id"):
+        raise HTTPException(403, "Not allowed")
+
+    regs = await db.program_registrations.find({"program_id": program_id}, {"_id": 0}).sort("created_at", 1).to_list(2000)
+    if not regs:
+        return []
+
+    member_ids = [r.get("member_id") for r in regs if r.get("member_id")]
+    user_ids = [r.get("user_id") for r in regs if r.get("user_id")]
+    members = {m["member_id"]: m for m in await db.members.find({"member_id": {"$in": member_ids}}, {"_id": 0}).to_list(2000)}
+    users = {u["user_id"]: u for u in await db.users.find({"user_id": {"$in": user_ids}}, {"_id": 0}).to_list(2000)}
+
+    # Enrich chapters
+    chapter_ids = list({m.get("chapter_id") for m in members.values() if m.get("chapter_id")})
+    chapters = {c["chapter_id"]: c.get("name", "") for c in await db.chapters.find({"chapter_id": {"$in": chapter_ids}}, {"_id": 0, "chapter_id": 1, "name": 1}).to_list(200)}
+
+    out = []
+    for r in regs:
+        m = members.get(r.get("member_id"), {}) if r.get("member_id") else {}
+        u = users.get(r.get("user_id"), {}) if r.get("user_id") else {}
+        out.append({
+            **r,
+            "member": {
+                "member_id": m.get("member_id", ""),
+                "full_name": m.get("full_name") or r.get("user_name") or u.get("name", ""),
+                "full_name_hy": m.get("full_name_hy", ""),
+                "email": m.get("email") or r.get("user_email") or u.get("email", ""),
+                "phone": m.get("phone", ""),
+                "dob": m.get("dob", ""),
+                "gender": m.get("gender", ""),
+                "section": m.get("section", ""),
+                "patrol": m.get("patrol", ""),
+                "position": m.get("position", ""),
+                "chapter_id": m.get("chapter_id", ""),
+                "chapter_name": chapters.get(m.get("chapter_id"), ""),
+                "guardian_name": m.get("guardian_name", ""),
+                "guardian_phone": m.get("guardian_phone", ""),
+                "parent_email": m.get("parent_email", ""),
+                "emergency_contact": m.get("emergency_contact", ""),
+                "membership_start": m.get("membership_start", ""),
+                "status": m.get("status", ""),
+            },
+        })
+    return out
 
 @api.get("/programs/{program_id}/my-registration")
 async def my_registration(program_id: str, user: dict = Depends(get_current_user)):
@@ -1272,6 +1550,63 @@ async def unregister_from_program(program_id: str, user: dict = Depends(get_curr
             await db.program_registrations.update_one({"reg_id": wl["reg_id"]}, {"$set": {"status": "registered"}})
             await notify([wl["user_id"]], "Waitlist promoted!", "A spot opened up — you're now registered.", "success", "/programs")
     await audit(user, "unregister", "program", program_id)
+    return {"ok": True}
+
+# ---------- Registration management (leader/admin) ----------
+async def _reg_guard(user: dict, reg_id: str):
+    """Fetch registration + program + enforce leader scope; return (reg, program)."""
+    if not is_leader(user["role"]):
+        raise HTTPException(403, "Not allowed")
+    r = await db.program_registrations.find_one({"reg_id": reg_id}, {"_id": 0})
+    if not r: raise HTTPException(404, "Registration not found")
+    p = await db.programs.find_one({"program_id": r["program_id"]}, {"_id": 0})
+    if not p: raise HTTPException(404, "Program not found")
+    if user["role"] in LEADER_ROLES and p.get("chapter_id") and p.get("chapter_id") != user.get("chapter_id"):
+        raise HTTPException(403, "Not allowed for this chapter")
+    return r, p
+
+@api.post("/programs/registrations/{reg_id}/mark-paid")
+async def mark_registration_paid(reg_id: str, user: dict = Depends(get_current_user)):
+    r, p = await _reg_guard(user, reg_id)
+    await db.program_registrations.update_one({"reg_id": reg_id}, {"$set": {"paid": True, "paid_by": user["email"], "paid_at": now_iso()}})
+    if r.get("user_id"):
+        await notify([r["user_id"]], "Payment recorded", f"Your registration for '{p.get('title')}' is now marked paid.", "success", "/programs")
+    await audit(user, "mark_paid", "program_registration", reg_id, {"program": p["program_id"]})
+    return {"ok": True}
+
+@api.post("/programs/registrations/{reg_id}/mark-unpaid")
+async def mark_registration_unpaid(reg_id: str, user: dict = Depends(get_current_user)):
+    r, p = await _reg_guard(user, reg_id)
+    await db.program_registrations.update_one({"reg_id": reg_id}, {"$set": {"paid": False}, "$unset": {"paid_by": "", "paid_at": ""}})
+    await audit(user, "mark_unpaid", "program_registration", reg_id, {"program": p["program_id"]})
+    return {"ok": True}
+
+@api.post("/programs/registrations/{reg_id}/promote")
+async def promote_registration(reg_id: str, user: dict = Depends(get_current_user)):
+    """Move a waitlisted registrant to registered (leader/admin action)."""
+    r, p = await _reg_guard(user, reg_id)
+    if r.get("status") != "waitlisted":
+        raise HTTPException(400, "Registration is not on the waitlist")
+    await db.program_registrations.update_one({"reg_id": reg_id}, {"$set": {"status": "registered", "promoted_by": user["email"], "promoted_at": now_iso()}})
+    if r.get("user_id"):
+        await notify([r["user_id"]], "Waitlist promoted!", f"A leader confirmed your spot for '{p.get('title')}'.", "success", "/programs")
+    await audit(user, "promote", "program_registration", reg_id, {"program": p["program_id"]})
+    return {"ok": True}
+
+@api.delete("/programs/registrations/{reg_id}")
+async def remove_registration(reg_id: str, user: dict = Depends(get_current_user)):
+    """Remove a registrant. Auto-promotes the earliest waitlisted user if we freed a paid spot."""
+    r, p = await _reg_guard(user, reg_id)
+    await db.program_registrations.delete_one({"reg_id": reg_id})
+    if r.get("status") == "registered":
+        wl = await db.program_registrations.find_one({"program_id": p["program_id"], "status": "waitlisted"}, sort=[("created_at", 1)])
+        if wl:
+            await db.program_registrations.update_one({"reg_id": wl["reg_id"]}, {"$set": {"status": "registered", "promoted_by": user["email"], "promoted_at": now_iso()}})
+            if wl.get("user_id"):
+                await notify([wl["user_id"]], "Waitlist promoted!", f"A spot opened up for '{p.get('title')}' — you're now registered.", "success", "/programs")
+    if r.get("user_id"):
+        await notify([r["user_id"]], "Registration removed", f"Your registration for '{p.get('title')}' was removed by a leader.", "warning", "/programs")
+    await audit(user, "remove_registration", "program_registration", reg_id, {"program": p["program_id"], "was_status": r.get("status")})
     return {"ok": True}
 
 # ---------- Attendance ----------
@@ -1447,10 +1782,13 @@ async def update_profile(payload: ProfileUpdate, user: dict = Depends(get_curren
 
 class LeaderPublicProfileUpdate(BaseModel):
     name: Optional[str] = None
+    name_hy: Optional[str] = None
     picture: Optional[str] = None
     bio: Optional[str] = None
+    bio_hy: Optional[str] = None
     phone: Optional[str] = None
     position_title: Optional[str] = None
+    position_title_hy: Optional[str] = None
 
 @api.put("/users/{uid}/public-profile")
 async def update_leader_public_profile(uid: str, payload: LeaderPublicProfileUpdate, user: dict = Depends(require_roles("national_admin"))):

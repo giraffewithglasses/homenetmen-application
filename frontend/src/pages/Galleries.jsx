@@ -8,10 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { Plus, Image as ImageIcon, Trash2, X, Download, Camera } from "lucide-react";
 
 export default function Galleries() {
   const { user } = useAuth();
+  const { t } = useT();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState(null); // gallery to view
@@ -45,20 +47,52 @@ export default function Galleries() {
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <div className="uppercase-label">Photo Album</div>
-          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Galleries</h1>
-          <p className="text-muted-foreground mt-1">Moments from chapters across the country.</p>
+          <div className="uppercase-label">{t("Photo Album", "Լուսանկարների ալբոմ")}</div>
+          <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Galleries", "Պատկերասրահ")}</h1>
+          <p className="text-muted-foreground mt-1">{t("Moments from chapters across the country.", "Մասնաճյուղերի պահեր՝ ամբողջ երկրից։")}</p>
         </div>
         {canManage && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-gallery-btn"><Plus size={16} className="mr-2"/>New Gallery</Button>
+              <Button className="btn-pill bg-[hsl(12,65%,63%)]" data-testid="new-gallery-btn"><Plus size={16} className="mr-2"/>{t("New Gallery", "Նոր պատկերասրահ")}</Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>New Gallery</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>{t("New Gallery", "Նոր պատկերասրահ")}</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <div><Label>Title</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} data-testid="gal-title"/></div>
                 <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}/></div>
+
+                <div>
+                  <Label>Cover photo <span className="text-muted-foreground text-xs">(shown on homepage before scouts click in)</span></Label>
+                  <div className="flex items-center gap-3 mt-1">
+                    <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden bg-muted flex-shrink-0">
+                      {form.cover
+                        ? <img src={form.cover} alt="" className="w-full h-full object-cover"/>
+                        : <ImageIcon size={22} className="text-muted-foreground/60"/>}
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          if (f.size > 2 * 1024 * 1024) return toast.error(`${f.name} > 2MB`);
+                          const r = new FileReader();
+                          r.onload = () => setForm(prev => ({ ...prev, cover: r.result }));
+                          r.readAsDataURL(f);
+                        }}
+                        className="text-sm"
+                        data-testid="gal-cover-upload"
+                      />
+                      {form.cover && (
+                        <button type="button" onClick={() => setForm({ ...form, cover: "" })} className="text-xs text-muted-foreground hover:text-[hsl(0,65%,55%)]">Remove cover</button>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">Leave empty and we'll use the first photo automatically.</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <Label>Photos</Label>
                   <Input ref={fileRef} type="file" accept="image/*" multiple onChange={e => addFiles(e.target.files)} data-testid="gal-files"/>

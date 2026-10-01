@@ -7,9 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/context/AuthContext";
+import { useT } from "@/context/I18nContext";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
-import { UserCheck, UserX, ShieldCheck, Archive, Trash2, ArchiveRestore } from "lucide-react";
+import { UserCheck, UserX, ShieldCheck, Archive, Trash2, ArchiveRestore, Globe, MapPin, Save, GripVertical } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 const ROLES = [
   "national_admin", "chapter_admin", "chapter_leader",
@@ -27,6 +31,7 @@ const ROLE_LABEL = {
 
 export default function Administration() {
   const { user } = useAuth();
+  const { t } = useT();
   const [users, setUsers] = useState([]);
   const [pending, setPending] = useState([]);
   const [chapters, setChapters] = useState([]);
@@ -82,8 +87,8 @@ export default function Administration() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="uppercase-label">Command Center</div>
-        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Administration</h1>
+        <div className="uppercase-label">{t("Command Center", "Հրամանատարական կենտրոն")}</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Administration", "Կառավարում")}</h1>
       </div>
 
       <Tabs defaultValue={pending.length ? "pending" : "users"}>
@@ -93,6 +98,8 @@ export default function Administration() {
           </TabsTrigger>
           <TabsTrigger value="users" className="rounded-full" data-testid="tab-users">Users</TabsTrigger>
           {user?.role === "national_admin" && <TabsTrigger value="audit" className="rounded-full" data-testid="tab-audit">Audit Log</TabsTrigger>}
+          {user?.role === "national_admin" && <TabsTrigger value="homepage" className="rounded-full" data-testid="tab-homepage">Homepage</TabsTrigger>}
+          {user?.role === "national_admin" && <TabsTrigger value="translations" className="rounded-full" data-testid="tab-translations">Translations</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="pending">
@@ -244,7 +251,267 @@ export default function Administration() {
             </Card>
           </TabsContent>
         )}
+
+        {user?.role === "national_admin" && (
+          <TabsContent value="homepage">
+            <HomepageSettings/>
+          </TabsContent>
+        )}
+
+        {user?.role === "national_admin" && (
+          <TabsContent value="translations">
+            <TranslationsManager/>
+          </TabsContent>
+        )}
       </Tabs>
+    </div>
+  );
+}
+
+function TranslationsManager() {
+  const [items, setItems] = useState([]);
+  const [q, setQ] = useState("");
+  const [dirty, setDirty] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [newEn, setNewEn] = useState("");
+  const [newHy, setNewHy] = useState("");
+
+  const load = () => api.get("/translations").then(r => { setItems(r.data); setDirty({}); }).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const setHy = (en, hy) => setDirty(prev => ({ ...prev, [en]: hy }));
+
+  const saveAll = async () => {
+    const entries = Object.entries(dirty).map(([en, hy]) => ({ en, hy }));
+    if (!entries.length) return toast("Nothing to save");
+    setSaving(true);
+    try {
+      await api.put("/translations", { entries });
+      toast.success(`Saved ${entries.length} translation${entries.length === 1 ? "" : "s"}`);
+      load();
+    } catch { toast.error("Save failed"); }
+    finally { setSaving(false); }
+  };
+
+  const addNew = async () => {
+    if (!newEn.trim()) return toast.error("Enter the English text first");
+    try {
+      await api.put("/translations", { entries: [{ en: newEn.trim(), hy: newHy.trim() }] });
+      toast.success("Added");
+      setNewEn(""); setNewHy(""); load();
+    } catch { toast.error("Failed"); }
+  };
+
+  const remove = async (en) => {
+    if (!window.confirm(`Delete translation for “${en}”?`)) return;
+    try { await api.delete(`/translations?en=${encodeURIComponent(en)}`); toast.success("Deleted"); load(); }
+    catch { toast.error("Failed"); }
+  };
+
+  const filtered = items.filter(it => {
+    if (!q.trim()) return true;
+    const s = q.toLowerCase();
+    return (it.en || "").toLowerCase().includes(s) || (it.hy || "").toLowerCase().includes(s);
+  });
+
+  const untranslated = filtered.filter(it => !it.hy).length;
+  const dirtyCount = Object.keys(dirty).length;
+
+  return (
+    <div className="space-y-4 mt-4">
+      <Card className="clay-card p-6" data-testid="translations-add-card">
+        <div className="flex items-center gap-2 mb-4">
+          <Globe size={16} className="text-[hsl(12,65%,55%)]"/>
+          <h3 className="font-display font-bold text-lg">Add or update a phrase</h3>
+        </div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <div>
+            <Label>English (source key)</Label>
+            <Input value={newEn} onChange={e => setNewEn(e.target.value)} placeholder="e.g. Prepared. Together. Outdoors." data-testid="tr-new-en"/>
+          </div>
+          <div>
+            <Label>Armenian</Label>
+            <Input value={newHy} onChange={e => setNewHy(e.target.value)} placeholder="օրինակ՝ Պատրաստ։ Միասին։ Բնության մեջ։" data-testid="tr-new-hy"/>
+          </div>
+        </div>
+        <div className="flex justify-end mt-3">
+          <Button onClick={addNew} className="btn-pill bg-[hsl(149,40%,30%)]" data-testid="tr-add-btn">
+            <Save size={14} className="mr-2"/> Save phrase
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Any phrase saved here immediately overrides the built-in Armenian text on the homepage. Match the exact English wording (case + punctuation) so the site can find it.
+        </p>
+      </Card>
+
+      <Card className="clay-card p-6" data-testid="translations-list-card">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <div>
+            <h3 className="font-display font-bold text-lg">Dictionary <span className="text-muted-foreground font-normal">({items.length})</span></h3>
+            {untranslated > 0 && <div className="text-xs text-[hsl(0,65%,55%)] mt-1">{untranslated} phrase{untranslated === 1 ? "" : "s"} still empty in Armenian</div>}
+          </div>
+          <div className="flex items-center gap-2">
+            <Input placeholder="Search…" value={q} onChange={e => setQ(e.target.value)} className="w-64" data-testid="tr-search"/>
+            <Button onClick={saveAll} disabled={!dirtyCount || saving} className="btn-pill bg-[hsl(12,65%,63%)] hover:bg-[hsl(12,70%,55%)]" data-testid="tr-save-all">
+              <Save size={14} className="mr-2"/> {saving ? "Saving…" : dirtyCount ? `Save ${dirtyCount}` : "No changes"}
+            </Button>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-10">
+            {items.length === 0 ? "No saved translations yet — add one above." : "No matches for that search."}
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+            {filtered.map(it => {
+              const value = it.en in dirty ? dirty[it.en] : (it.hy || "");
+              return (
+                <div key={it.en} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_40px] gap-2 items-center p-3 rounded-xl border border-border hover:bg-muted/30" data-testid={`tr-row-${it.en.slice(0,20)}`}>
+                  <div className="text-sm font-medium truncate" title={it.en}>{it.en}</div>
+                  <Input
+                    value={value}
+                    onChange={e => setHy(it.en, e.target.value)}
+                    placeholder="Հայերեն"
+                    className={value !== (it.hy || "") ? "border-[hsl(12,65%,63%)]" : ""}
+                    data-testid={`tr-input-${it.en.slice(0,20)}`}
+                  />
+                  <button
+                    onClick={() => remove(it.en)}
+                    className="w-8 h-8 rounded-full text-muted-foreground hover:bg-[hsl(0,65%,55%)]/10 hover:text-[hsl(0,65%,55%)] flex items-center justify-center justify-self-end"
+                    data-testid={`tr-del-${it.en.slice(0,20)}`}
+                    title="Delete"
+                  ><Trash2 size={14}/></button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function HomepageSettings() {
+  const [settings, setSettings] = useState(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    api.get("/public/homepage-settings").then(r => setSettings(r.data)).catch(() => {});
+  }, []);
+
+  if (!settings) return <Card className="clay-card p-6 mt-4">Loading…</Card>;
+
+  const updateFooter = (k, v) => setSettings(s => ({ ...s, footer: { ...s.footer, [k]: v } }));
+  const move = (idx, dir) => {
+    const order = [...settings.section_order];
+    const j = idx + dir;
+    if (j < 0 || j >= order.length) return;
+    [order[idx], order[j]] = [order[j], order[idx]];
+    setSettings({ ...settings, section_order: order });
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put("/homepage-settings", { footer: settings.footer, section_order: settings.section_order });
+      toast.success("Homepage settings saved");
+    } catch { toast.error("Failed to save"); }
+    finally { setSaving(false); }
+  };
+
+  const LABELS = {
+    chapters: "Chapters", events: "Upcoming events", badges: "Badges",
+    newsletters: "Newsletters", leaders: "Leaders", galleries: "Galleries", resources: "Resources",
+  };
+
+  return (
+    <div className="grid md:grid-cols-2 gap-4 mt-4">
+      <Card className="clay-card p-6" data-testid="admin-footer-editor">
+        <div className="flex items-center gap-2 mb-4">
+          <Globe size={16} className="text-[hsl(12,65%,55%)]"/>
+          <h3 className="font-display font-bold text-lg">Footer & HQ info</h3>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <Label>Description (English)</Label>
+            <Textarea rows={3} value={settings.footer.description || ""} onChange={e => updateFooter("description", e.target.value)} data-testid="footer-desc-en"/>
+          </div>
+          <div>
+            <Label>Description (Armenian)</Label>
+            <Textarea rows={3} value={settings.footer.description_hy || ""} onChange={e => updateFooter("description_hy", e.target.value)} data-testid="footer-desc-hy"/>
+          </div>
+          <div>
+            <Label>HQ address</Label>
+            <Textarea rows={2} value={settings.footer.hq_address || ""} onChange={e => updateFooter("hq_address", e.target.value)} data-testid="footer-address"/>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Email</Label>
+              <Input value={settings.footer.hq_email || ""} onChange={e => updateFooter("hq_email", e.target.value)} data-testid="footer-email"/>
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input value={settings.footer.hq_phone || ""} onChange={e => updateFooter("hq_phone", e.target.value)} data-testid="footer-phone"/>
+            </div>
+          </div>
+          <div>
+            <Label className="flex items-center gap-1"><MapPin size={12}/> Map pin (latitude, longitude)</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Input type="number" step="any" value={settings.footer.latitude ?? ""} onChange={e => updateFooter("latitude", parseFloat(e.target.value))} data-testid="footer-lat"/>
+              <Input type="number" step="any" value={settings.footer.longitude ?? ""} onChange={e => updateFooter("longitude", parseFloat(e.target.value))} data-testid="footer-lng"/>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Yervand Kochar 17/6, Yerevan ≈ 40.1893, 44.5175</p>
+          </div>
+
+          <div className="border-t border-border pt-4 mt-2">
+            <div className="font-semibold text-sm mb-2 flex items-center gap-2"><Globe size={14} className="text-[hsl(12,65%,55%)]"/> Social links <span className="text-xs text-muted-foreground font-normal">(leave empty to hide)</span></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Facebook URL</Label>
+                <Input value={settings.footer.facebook || ""} onChange={e => updateFooter("facebook", e.target.value)} placeholder="https://facebook.com/homenetmenhask" data-testid="footer-facebook"/>
+              </div>
+              <div>
+                <Label className="text-xs">Instagram URL</Label>
+                <Input value={settings.footer.instagram || ""} onChange={e => updateFooter("instagram", e.target.value)} placeholder="https://instagram.com/homenetmenhask" data-testid="footer-instagram"/>
+              </div>
+              <div>
+                <Label className="text-xs">X / Twitter URL <span className="text-muted-foreground">(optional)</span></Label>
+                <Input value={settings.footer.x || ""} onChange={e => updateFooter("x", e.target.value)} placeholder="https://x.com/homenetmenhask" data-testid="footer-x"/>
+              </div>
+              <div>
+                <Label className="text-xs">Telegram URL <span className="text-muted-foreground">(optional)</span></Label>
+                <Input value={settings.footer.telegram || ""} onChange={e => updateFooter("telegram", e.target.value)} placeholder="https://t.me/homenetmenhask" data-testid="footer-telegram"/>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="clay-card p-6" data-testid="admin-section-order">
+        <div className="flex items-center gap-2 mb-4">
+          <GripVertical size={16} className="text-[hsl(12,65%,55%)]"/>
+          <h3 className="font-display font-bold text-lg">Homepage section order</h3>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">Reorder how sections appear to guests. Top = first.</p>
+        <div className="space-y-2">
+          {settings.section_order.map((k, i) => (
+            <div key={k} className="flex items-center gap-3 p-3 rounded-xl border border-border" data-testid={`section-row-${k}`}>
+              <GripVertical size={14} className="text-muted-foreground"/>
+              <div className="flex-1 font-semibold text-sm">{LABELS[k] || k}</div>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" onClick={() => move(i, -1)} disabled={i === 0} className="h-7 w-7 p-0" data-testid={`section-up-${k}`}>↑</Button>
+                <Button size="sm" variant="ghost" onClick={() => move(i, 1)} disabled={i === settings.section_order.length - 1} className="h-7 w-7 p-0" data-testid={`section-down-${k}`}>↓</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <div className="md:col-span-2 flex justify-end">
+        <Button onClick={save} disabled={saving} className="btn-pill bg-[hsl(149,40%,30%)] hover:bg-[hsl(149,40%,25%)]" data-testid="save-homepage-settings">
+          <Save size={14} className="mr-2"/> {saving ? "Saving…" : "Save homepage settings"}
+        </Button>
+      </div>
     </div>
   );
 }
