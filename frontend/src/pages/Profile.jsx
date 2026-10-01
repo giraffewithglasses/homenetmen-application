@@ -9,9 +9,11 @@ import { useAuth } from "@/context/AuthContext";
 import { api, formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { Camera, Save, X, KeyRound } from "lucide-react";
+import { useT } from "@/context/I18nContext";
 
 export default function Profile() {
   const { user, updateProfile } = useAuth();
+  const { t } = useT();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.name || "");
   const [picture, setPicture] = useState(user?.picture || "");
@@ -59,8 +61,8 @@ export default function Profile() {
   return (
     <div className="space-y-6">
       <div>
-        <div className="uppercase-label">Your account</div>
-        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">Profile</h1>
+        <div className="uppercase-label">{t("Your account", "Ձեր հաշիվը")}</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-black tracking-tight mt-1">{t("Profile", "Պրոֆիլ")}</h1>
       </div>
 
       <Card className="clay-card p-8">

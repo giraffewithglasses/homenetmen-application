@@ -17,7 +17,8 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await api.get("/auth/me");
       setUser(data);
-    } catch {
+    } catch (err) {
+      console.warn("auth check failed:", err?.response?.status || err?.message);
       localStorage.removeItem("scout_token");
     } finally {
       setLoading(false);
@@ -43,7 +44,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     localStorage.removeItem("scout_token");
     setUser(null);
-    try { await api.post("/auth/logout"); } catch {}
+    try { await api.post("/auth/logout"); } catch (err) { console.warn("logout call failed:", err?.message); }
   };
 
   const setSessionUser = (u, token) => {
